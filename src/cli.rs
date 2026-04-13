@@ -1,13 +1,21 @@
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(name = "cocox")]
 #[command(about = "A Conventional Commitlint binary tool")]
 #[command(version)]
+#[command(group(
+    ArgGroup::new("input")
+        .args(["message", "file", "hash"])
+        .required(true)
+        .multiple(false)))]
 pub struct Cli {
-    #[arg(conflicts_with = "file", required_unless_present = "file")]
+    #[arg()]
     pub message: Option<String>,
 
-    #[arg(long, conflicts_with = "message", required_unless_present = "message")]
+    #[arg(long)]
     pub file: Option<String>,
+
+    #[arg(long)]
+    pub hash: Option<String>,
 }
