@@ -2,6 +2,7 @@ use crate::cli::Cli;
 use crate::git_helpers::get_commit_message_from_hash;
 use crate::linter::lint_commit_message;
 use crate::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
+use crate::utils::{is_empty, is_ignored};
 use anyhow::{Context, Result};
 
 fn read_file(file: &String) -> Result<String> {
@@ -10,6 +11,18 @@ fn read_file(file: &String) -> Result<String> {
 }
 
 fn handle_commit_message(msg: &str) {
+    if is_empty(msg) {
+        eprintln!(
+            "{}: Aborting commit due to empty commit message",
+            VALIDATION_FAILED
+        );
+        std::process::exit(1);
+    }
+
+    if is_ignored(msg) {
+        return;
+    }
+
     let success = lint_commit_message(msg);
     if success {
         println!("{}", VALIDATION_SUCCESSFUL);
