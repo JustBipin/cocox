@@ -16,6 +16,11 @@ regex = "1"
 clap = { version = "4.0", features = ["derive"] }
 anyhow = "1.0"
 
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
