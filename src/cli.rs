@@ -22,6 +22,10 @@ pub struct Cli {
     #[arg(long)]
     pub from_hash: Option<String>,
 
-    #[arg(long, requires = "from_hash", default_value = "HEAD")]
+    #[arg(
+        long, requires = "from_hash",
+        conflicts_with_all = ["message", "file", "hash"],
+        default_value = "HEAD"
+    )]
     pub to_hash: Option<String>,
 }
