@@ -1,4 +1,7 @@
+mod common;
+
 use assert_cmd::Command;
+use common::TestRepo;
 use predicates::prelude::*;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -9,7 +12,8 @@ fn cocox() -> Command {
 
 fn write_temp(contents: &str) -> NamedTempFile {
     let mut file = NamedTempFile::new().expect("create temp file");
-    file.write_all(contents.as_bytes()).expect("write temp file");
+    file.write_all(contents.as_bytes())
+        .expect("write temp file");
     file
 }
 
@@ -168,20 +172,24 @@ fn missing_file_fails() {
         .arg("/nonexistent/path/commit-msg.txt")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("failed to read commit message file"));
+        .stderr(predicate::str::contains(
+            "failed to read commit message file",
+        ));
 }
 
 // --- --hash ---------------------------------------------------------------
 
 #[test]
-fn hash_head_exits_cleanly() {
-    // We only assert exit-success here: HEAD's message depends on the
-    // environment (locally a conventional commit; under
-    // actions/checkout it's a synthetic merge commit, which falls into
-    // the ignore path and prints nothing). A stronger stdout assertion
-    // requires a fixture commit with a known message — tracked
-    // separately.
-    cocox().arg("--hash").arg("HEAD").assert().success();
+fn hash_head_valid_commit_succeeds() {
+    let repo = TestRepo::new();
+    repo.commit("feat: add new feature");
+
+    cocox()
+        .arg("--hash")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
 }
 
 #[test]
@@ -196,11 +204,211 @@ fn invalid_hash_fails() {
         ));
 }
 
+#[test]
+fn hash_exact_valid_commit_succeeds() {
+    let repo = TestRepo::new();
+    let hash = repo.commit("feat: add new feature");
+ 
+    cocox()
+        .arg("--hash")
+        .arg(&hash)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+ 
+#[test]
+fn hash_invalid_commit_message_fails() {
+    let repo = TestRepo::new();
+    let hash = repo.commit("not a conventional commit");
+ 
+    cocox()
+        .arg("--hash")
+        .arg(&hash)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+ 
+#[test]
+fn hash_ignored_commit_silently_succeeds() {
+    let repo = TestRepo::new();
+    let hash = repo.commit("Merge pull request #123");
+ 
+    cocox()
+        .arg("--hash")
+        .arg(&hash)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+// ---- hash range ----------------------------------------------------------
+
+#[test]
+fn hash_range_valid_commits_succeeds() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("feat: add new feature A");
+    repo.commit("fix: fix a bug");
+    repo.commit("fix: fix another bug");
+    repo.commit("feat: add another feature");
+    let c = repo.commit("perf: improve performence");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(a)
+        .arg("--to-hash")
+        .arg(c)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+
+ 
+#[test]
+fn hash_range_invalid_commit_in_middle_fails() {
+    let repo = TestRepo::new();
+ 
+    let a = repo.commit("feat: add new feature");
+    repo.commit("not a conventional commit");
+    let c = repo.commit("fix: fix a bug");
+ 
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&c)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+ 
+#[test]
+fn hash_range_invalid_from_commit_fails() {
+    let repo = TestRepo::new();
+ 
+    let a = repo.commit("not a conventional commit");
+    let b = repo.commit("feat: add new feature");
+ 
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&b)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+ 
+#[test]
+fn hash_range_invalid_to_commit_fails() {
+    let repo = TestRepo::new();
+ 
+    let a = repo.commit("feat: add new feature");
+    let b = repo.commit("not a conventional commit");
+ 
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&b)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+ 
+#[test]
+fn hash_range_ignored_commits_are_skipped() {
+    let repo = TestRepo::new();
+ 
+    let a = repo.commit("feat: add new feature");
+    repo.commit("Merge pull request #123");
+    let c = repo.commit("fix: fix a bug");
+ 
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&c)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+ 
+#[test]
+fn hash_range_single_commit_succeeds() {
+    let repo = TestRepo::new();
+ 
+    let a = repo.commit("feat: single commit");
+ 
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&a)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+ 
+#[test]
+fn hash_range_single_invalid_commit_fails() {
+    let repo = TestRepo::new();
+ 
+    let a = repo.commit("not a conventional commit");
+ 
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&a)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+
+
+#[test]
+fn from_hash_only_valid_commits_succeeds() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("feat: add new feature A");
+    repo.commit("fix: fix a bug");
+    repo.commit("fix: fix another bug");
+    repo.commit("feat: add another feature");
+    repo.commit("perf: improve performence");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(a)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+
 // --- clap argument constraints --------------------------------------------
 
 #[test]
 fn no_args_fails_with_clap_error() {
     cocox()
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("required"));
+}
+
+#[test]
+fn to_hash_only_fails() {
+    cocox()
+        .arg("--to-hash")
+        .arg("HEAD")
         .assert()
         .failure()
         .code(2)
@@ -227,6 +435,84 @@ fn file_and_hash_together_fail() {
         .arg("--file")
         .arg(file.path())
         .arg("--hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used"));
+}
+
+#[test]
+fn file_and_from_hash_together_fail() {
+    let file = write_temp("feat: a body");
+    cocox()
+        .arg("--file")
+        .arg(file.path())
+        .arg("--from-hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used"));
+}
+
+#[test]
+fn message_and_hash_together_fail() {
+    cocox()
+        .arg("feat: something")
+        .arg("--hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used"));
+}
+
+#[test]
+fn message_and_from_hash_together_fail() {
+    cocox()
+        .arg("feat: something")
+        .arg("--from-hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used"));
+}
+
+#[test]
+fn hash_and_from_hash_together_fail() {
+    cocox()
+        .arg("--hash")
+        .arg("HEAD")
+        .arg("--from-hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used"));
+}
+
+#[test]
+fn to_hash_with_hash_together_fail() {
+    // --to-hash requires --from-hash specifically, not just any input arg
+    cocox()
+        .arg("--hash")
+        .arg("HEAD")
+        .arg("--to-hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used"));
+}
+
+#[test]
+fn to_hash_with_message_fails() {
+    // --to-hash requires --from-hash, passing a message doesn't satisfy it
+    cocox()
+        .arg("feat: something")
+        .arg("--to-hash")
         .arg("HEAD")
         .assert()
         .failure()
