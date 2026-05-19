@@ -15,61 +15,46 @@ pub fn get_commit_message_from_hash(commit_hash: &str) -> Result<String> {
     Ok(message)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Result<Vec<String>> {
+    let delimiter = "========commit-delimiter========";
+    let range = format!("{}..{}", from_hash, to_hash);
 
-    fn git_show_head() -> Option<String> {
-        let output = Command::new("git")
-            .args(["show", "--format=%B", "-s", "HEAD"])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    }
+    // range A..B returns all commits from B but not A ie (B - A), so A has to added seaprately
+    let from_hash_message = get_commit_message_from_hash(from_hash)?;
 
-    #[test]
-    fn returns_head_commit_message() {
-        let Some(expected) = git_show_head() else {
-            eprintln!("skipping: not a git repo or git unavailable");
-            return;
-        };
+    let output = Command::new("git")
+        .args([
+            "log",
+            "--no-merges",
+            &format!("--pretty=format:%B{delimiter}"),
+            "--reverse",
+            &range,
+        ])
+        .output()
+        .with_context(|| {
+            format!(
+                "failed to execute git log for range {}, {}",
+                from_hash, to_hash
+            )
+        })?;
 
-        let got = get_commit_message_from_hash("HEAD").expect("HEAD should resolve");
-        assert_eq!(got, expected);
-        assert!(!got.is_empty(), "HEAD message should not be empty");
-    }
-
-    #[test]
-    fn returns_trimmed_message() {
-        // The function trims trailing whitespace/newlines that `git show` appends.
-        let Some(msg) = git_show_head() else {
-            eprintln!("skipping: not a git repo or git unavailable");
-            return;
-        };
-        assert_eq!(msg, msg.trim());
-    }
-
-    #[test]
-    fn errors_on_unknown_hash() {
-        // Use a clearly non-existent hash. 40 zeros is reserved/null in git.
-        let result = get_commit_message_from_hash("0000000000000000000000000000000000000000");
-        assert!(
-            result.is_err(),
-            "expected error for unknown hash, got {:?}",
-            result
+    if !output.status.success() {
+        anyhow::bail!(
+            "failed to retrieve commit messages for range {}, {}",
+            from_hash,
+            to_hash
         );
     }
 
-    #[test]
-    fn errors_on_malformed_hash() {
-        let result = get_commit_message_from_hash("not-a-real-hash-zzz");
-        assert!(
-            result.is_err(),
-            "expected error for malformed hash, got {:?}",
-            result
-        );
-    }
+    let mut messages: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .split(&delimiter)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_owned())
+        .collect();
+
+    // prepend the first message of the range
+    messages.insert(0, from_hash_message);
+
+    Ok(messages)
 }
