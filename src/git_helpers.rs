@@ -16,7 +16,6 @@ pub fn get_commit_message_from_hash(commit_hash: &str) -> Result<String> {
 }
 
 pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Result<Vec<String>> {
-    let delimiter = "========commit-delimiter========";
     let range = format!("{}..{}", from_hash, to_hash);
 
     // range A..B returns all commits from B but not A ie (B - A), so A has to added seaprately
@@ -26,7 +25,7 @@ pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Re
         .args([
             "log",
             "--no-merges",
-            &format!("--pretty=format:%B{delimiter}"),
+            "--pretty=format:%B%x00", // null byte for delimiter
             "--reverse",
             &range,
         ])
@@ -47,8 +46,8 @@ pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Re
     }
 
     let mut messages: Vec<String> = String::from_utf8_lossy(&output.stdout)
-        .split(&delimiter)
-        .map(|s| s.trim())
+        .split('\0')
+        .map(|s| s.trim()) // trim removes the trailing newline git adds to %B
         .filter(|s| !s.is_empty())
         .map(|s| s.to_owned())
         .collect();
