@@ -12,5 +12,5 @@ use cli::Cli;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
-    return command::run(args);
+    command::run(args)
 }

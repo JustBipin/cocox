@@ -11,11 +11,11 @@ pub fn is_ignored(message: &str) -> bool {
             return true;
         }
     }
-    return false;
+    false
 }
 
 pub fn is_empty(msg: &str) -> bool {
-    return msg.trim().is_empty();
+    msg.trim().is_empty()
 }
 
 #[cfg(test)]
@@ -52,7 +52,9 @@ mod tests {
     fn ignores_bitbucket_style_merged() {
         assert!(is_ignored("Merged bugfix-789 in master"));
         assert!(is_ignored("Merged PR #987: Update documentation"));
-        assert!(is_ignored("Merged PR #321: Bugfix - Resolve issue with login"));
+        assert!(is_ignored(
+            "Merged PR #321: Bugfix - Resolve issue with login"
+        ));
     }
 
     #[test]

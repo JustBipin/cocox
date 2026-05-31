@@ -10,7 +10,7 @@ pub fn lint_commit_message(message: &str) -> bool {
     );
 
     let re = Regex::new(&pattern).unwrap();
-    return re.is_match(message);
+    re.is_match(message)
 }
 
 #[cfg(test)]
@@ -56,10 +56,7 @@ mod tests {
     #[test]
     fn accepts_body_separated_by_blank_line() {
         assert_lint("feat: add new feature\n\nthis is body", true);
-        assert_lint(
-            "feat: add new feature\n\nthis is body\n\ntest",
-            true,
-        );
+        assert_lint("feat: add new feature\n\nthis is body\n\ntest", true);
     }
 
     #[test]

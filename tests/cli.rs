@@ -208,7 +208,7 @@ fn invalid_hash_fails() {
 fn hash_exact_valid_commit_succeeds() {
     let repo = TestRepo::new();
     let hash = repo.commit("feat: add new feature");
- 
+
     cocox()
         .arg("--hash")
         .arg(&hash)
@@ -216,12 +216,12 @@ fn hash_exact_valid_commit_succeeds() {
         .success()
         .stdout(predicate::str::contains("Commit validation: successful!"));
 }
- 
+
 #[test]
 fn hash_invalid_commit_message_fails() {
     let repo = TestRepo::new();
     let hash = repo.commit("not a conventional commit");
- 
+
     cocox()
         .arg("--hash")
         .arg(&hash)
@@ -230,12 +230,12 @@ fn hash_invalid_commit_message_fails() {
         .code(1)
         .stderr(predicate::str::contains("Commit validation: failed!"));
 }
- 
+
 #[test]
 fn hash_ignored_commit_silently_succeeds() {
     let repo = TestRepo::new();
     let hash = repo.commit("Merge pull request #123");
- 
+
     cocox()
         .arg("--hash")
         .arg(&hash)
@@ -267,113 +267,111 @@ fn hash_range_valid_commits_succeeds() {
         .stdout(predicate::str::contains("Commit validation: successful!"));
 }
 
- 
 #[test]
 fn hash_range_invalid_commit_in_middle_fails() {
     let repo = TestRepo::new();
- 
+
     let a = repo.commit("feat: add new feature");
     repo.commit("not a conventional commit");
     let c = repo.commit("fix: fix a bug");
- 
+
     cocox()
         .arg("--from-hash")
         .arg(&a)
         .arg("--to-hash")
         .arg(&c)
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
-}
- 
-#[test]
-fn hash_range_invalid_from_commit_fails() {
-    let repo = TestRepo::new();
- 
-    let a = repo.commit("not a conventional commit");
-    let b = repo.commit("feat: add new feature");
- 
-    cocox()
-        .arg("--from-hash")
-        .arg(&a)
-        .arg("--to-hash")
-        .arg(&b)
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
-}
- 
-#[test]
-fn hash_range_invalid_to_commit_fails() {
-    let repo = TestRepo::new();
- 
-    let a = repo.commit("feat: add new feature");
-    let b = repo.commit("not a conventional commit");
- 
-    cocox()
-        .arg("--from-hash")
-        .arg(&a)
-        .arg("--to-hash")
-        .arg(&b)
-        .assert()
-        .failure()
-        .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
-}
- 
-#[test]
-fn hash_range_ignored_commits_are_skipped() {
-    let repo = TestRepo::new();
- 
-    let a = repo.commit("feat: add new feature");
-    repo.commit("Merge pull request #123");
-    let c = repo.commit("fix: fix a bug");
- 
-    cocox()
-        .arg("--from-hash")
-        .arg(&a)
-        .arg("--to-hash")
-        .arg(&c)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
-}
- 
-#[test]
-fn hash_range_single_commit_succeeds() {
-    let repo = TestRepo::new();
- 
-    let a = repo.commit("feat: single commit");
- 
-    cocox()
-        .arg("--from-hash")
-        .arg(&a)
-        .arg("--to-hash")
-        .arg(&a)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
-}
- 
-#[test]
-fn hash_range_single_invalid_commit_fails() {
-    let repo = TestRepo::new();
- 
-    let a = repo.commit("not a conventional commit");
- 
-    cocox()
-        .arg("--from-hash")
-        .arg(&a)
-        .arg("--to-hash")
-        .arg(&a)
         .assert()
         .failure()
         .code(1)
         .stderr(predicate::str::contains("Commit validation: failed!"));
 }
 
+#[test]
+fn hash_range_invalid_from_commit_fails() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("not a conventional commit");
+    let b = repo.commit("feat: add new feature");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&b)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+
+#[test]
+fn hash_range_invalid_to_commit_fails() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("feat: add new feature");
+    let b = repo.commit("not a conventional commit");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&b)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
+
+#[test]
+fn hash_range_ignored_commits_are_skipped() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("feat: add new feature");
+    repo.commit("Merge pull request #123");
+    let c = repo.commit("fix: fix a bug");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&c)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+
+#[test]
+fn hash_range_single_commit_succeeds() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("feat: single commit");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&a)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Commit validation: successful!"));
+}
+
+#[test]
+fn hash_range_single_invalid_commit_fails() {
+    let repo = TestRepo::new();
+
+    let a = repo.commit("not a conventional commit");
+
+    cocox()
+        .arg("--from-hash")
+        .arg(&a)
+        .arg("--to-hash")
+        .arg(&a)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Commit validation: failed!"));
+}
 
 #[test]
 fn from_hash_only_valid_commits_succeeds() {
