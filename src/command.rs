@@ -69,14 +69,16 @@ pub fn run(args: Cli) -> Result<()> {
         let msg = read_file(file)?;
         handle_commit_message(&msg);
     } else if let Some(hash) = &args.hash {
+        // commit hash
         let msg = get_commit_message_from_hash(hash)?;
         handle_commit_message(&msg);
     } else if let Some(from_hash) = &args.from_hash {
-        let to_hash = &args.to_hash.unwrap();
+        // commit hash range
+        let to_hash = &args.to_hash;
         let messages = get_commit_messages_from_hash_range(from_hash, to_hash)?;
         handle_multiple_commit_messages(&messages);
     } else {
-        unreachable!("invalid option is handle by clap");
+        unreachable!("invalid option is handled by clap");
     }
 
     Ok(())

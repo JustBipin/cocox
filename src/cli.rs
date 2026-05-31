@@ -27,5 +27,5 @@ pub struct Cli {
         conflicts_with_all = ["message", "file", "hash"],
         default_value = "HEAD"
     )]
-    pub to_hash: Option<String>,
+    pub to_hash: String,
 }
