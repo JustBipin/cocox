@@ -18,7 +18,9 @@ pub fn get_commit_message_from_hash(commit_hash: &str) -> Result<String> {
 pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Result<Vec<String>> {
     let range = format!("{}..{}", from_hash, to_hash);
 
-    // range A..B returns all commits from B but not A ie (B - A), so A has to added seaprately
+    // git's A..B range is exclusive of A (returns commits reachable from B
+    // but not from A). To make the range inclusive we fetch A's message
+    // separately and prepend it below.
     let from_hash_message = get_commit_message_from_hash(from_hash)?;
 
     let output = Command::new("git")
