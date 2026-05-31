@@ -3,6 +3,7 @@ mod common;
 use assert_cmd::Command;
 use common::TestRepo;
 use predicates::prelude::*;
+use serial_test::serial;
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -180,6 +181,7 @@ fn missing_file_fails() {
 // --- --hash ---------------------------------------------------------------
 
 #[test]
+#[serial]
 fn hash_head_valid_commit_succeeds() {
     let repo = TestRepo::new();
     repo.commit("feat: add new feature");
@@ -205,6 +207,7 @@ fn invalid_hash_fails() {
 }
 
 #[test]
+#[serial]
 fn hash_exact_valid_commit_succeeds() {
     let repo = TestRepo::new();
     let hash = repo.commit("feat: add new feature");
@@ -218,6 +221,7 @@ fn hash_exact_valid_commit_succeeds() {
 }
 
 #[test]
+#[serial]
 fn hash_invalid_commit_message_fails() {
     let repo = TestRepo::new();
     let hash = repo.commit("not a conventional commit");
@@ -232,6 +236,7 @@ fn hash_invalid_commit_message_fails() {
 }
 
 #[test]
+#[serial]
 fn hash_ignored_commit_silently_succeeds() {
     let repo = TestRepo::new();
     let hash = repo.commit("Merge pull request #123");
@@ -248,6 +253,7 @@ fn hash_ignored_commit_silently_succeeds() {
 // ---- hash range ----------------------------------------------------------
 
 #[test]
+#[serial]
 fn hash_range_valid_commits_succeeds() {
     let repo = TestRepo::new();
 
@@ -255,7 +261,7 @@ fn hash_range_valid_commits_succeeds() {
     repo.commit("fix: fix a bug");
     repo.commit("fix: fix another bug");
     repo.commit("feat: add another feature");
-    let c = repo.commit("perf: improve performence");
+    let c = repo.commit("perf: improve performance");
 
     cocox()
         .arg("--from-hash")
@@ -268,6 +274,7 @@ fn hash_range_valid_commits_succeeds() {
 }
 
 #[test]
+#[serial]
 fn hash_range_invalid_commit_in_middle_fails() {
     let repo = TestRepo::new();
 
@@ -287,6 +294,7 @@ fn hash_range_invalid_commit_in_middle_fails() {
 }
 
 #[test]
+#[serial]
 fn hash_range_invalid_from_commit_fails() {
     let repo = TestRepo::new();
 
@@ -305,6 +313,7 @@ fn hash_range_invalid_from_commit_fails() {
 }
 
 #[test]
+#[serial]
 fn hash_range_invalid_to_commit_fails() {
     let repo = TestRepo::new();
 
@@ -323,6 +332,7 @@ fn hash_range_invalid_to_commit_fails() {
 }
 
 #[test]
+#[serial]
 fn hash_range_ignored_commits_are_skipped() {
     let repo = TestRepo::new();
 
@@ -341,6 +351,7 @@ fn hash_range_ignored_commits_are_skipped() {
 }
 
 #[test]
+#[serial]
 fn hash_range_single_commit_succeeds() {
     let repo = TestRepo::new();
 
@@ -357,6 +368,7 @@ fn hash_range_single_commit_succeeds() {
 }
 
 #[test]
+#[serial]
 fn hash_range_single_invalid_commit_fails() {
     let repo = TestRepo::new();
 
@@ -374,6 +386,7 @@ fn hash_range_single_invalid_commit_fails() {
 }
 
 #[test]
+#[serial]
 fn from_hash_only_valid_commits_succeeds() {
     let repo = TestRepo::new();
 
@@ -381,7 +394,7 @@ fn from_hash_only_valid_commits_succeeds() {
     repo.commit("fix: fix a bug");
     repo.commit("fix: fix another bug");
     repo.commit("feat: add another feature");
-    repo.commit("perf: improve performence");
+    repo.commit("perf: improve performance");
 
     cocox()
         .arg("--from-hash")

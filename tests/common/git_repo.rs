@@ -1,23 +1,24 @@
-use assert_cmd::Command;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
+use std::process::Command;
 use tempfile::TempDir;
 
-static SERIAL: Mutex<()> = Mutex::new(());
 pub struct TestRepo {
     dir: TempDir,
     original_dir: PathBuf,
-    _guard: MutexGuard<'static, ()>,
 }
 
 impl TestRepo {
-    /// Initialize a temporary test repo with git config
-    ///Change working directory to that repo
-    /// working directory resets to project/original repo when out of scope.
+    /// Initialize a temporary test repo with git config.
+    ///
+    /// ## Important: Process-Global State
+    /// This function changes the current working directory of the **entire process** /// to the temporary repository. Because Cargo runs tests in parallel threads within
+    /// the same process, **any test using `TestRepo` must be marked with `#[serial]`** /// from the `serial_test` crate to prevent race conditions and cross-test interference.
+    ///
+    /// The working directory will automatically reset back to the original project
+    /// directory when this `TestRepo` goes out of scope (via `Drop`).
     pub fn new() -> Self {
-        let guard = SERIAL.lock().unwrap();
         let dir = TempDir::new().expect("failed to create temp dir");
         let path = dir.path();
         let original_dir = env::current_dir().expect("failed to get current dir");
@@ -27,14 +28,10 @@ impl TestRepo {
         run_git(path, &["config", "user.email", "test@test.com"]);
         run_git(path, &["config", "user.name", "Test"]);
 
-        // set working directory to temorary git repo
+        // set working directory to temporary git repo
         env::set_current_dir(path).expect("failed to chdir into test repo");
 
-        Self {
-            dir,
-            original_dir,
-            _guard: guard,
-        }
+        Self { dir, original_dir }
     }
 
     pub fn commit(&self, message: &str) -> String {
@@ -55,18 +52,33 @@ impl Drop for TestRepo {
 }
 
 fn run_git(dir: &std::path::Path, args: &[&str]) {
-    Command::new("git")
+    let status = Command::new("git")
         .args(args)
         .current_dir(dir)
-        .output()
-        .expect("git command failed");
+        .status()
+        .expect("failed to execute git process");
+
+    assert!(
+        status.success(),
+        "git command '{}' failed with {:#}",
+        args.join(" "),
+        status
+    );
 }
 
 fn git_output(dir: &std::path::Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let output = Command::new("git")
         .args(args)
         .current_dir(dir)
         .output()
-        .expect("git command failed");
-    String::from_utf8_lossy(&out.stdout).trim().to_string()
+        .expect("failed to execute git process");
+
+    if !output.status.success() {
+        panic!(
+            "git command failed with status: {}\nstderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
 }

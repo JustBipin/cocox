@@ -4,10 +4,12 @@ mod git_helpers;
 
 use common::TestRepo;
 use git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
+use serial_test::serial;
 
 // ---- get_commit_message_from_hash ----------------------------------------
 
 #[test]
+#[serial]
 fn returns_commit_message_for_known_hash() {
     let repo = TestRepo::new();
     let hash = repo.commit("feat: add new feature");
@@ -17,6 +19,7 @@ fn returns_commit_message_for_known_hash() {
 }
 
 #[test]
+#[serial]
 fn returns_commit_message_for_head() {
     let repo = TestRepo::new();
     repo.commit("fix: repair something");
@@ -46,6 +49,7 @@ fn errors_on_malformed_hash() {
 // ---- get_commit_messages_from_hash_range ---------------------------------
 
 #[test]
+#[serial]
 fn range_returns_all_commits_inclusive() {
     let repo = TestRepo::new();
     let a = repo.commit("feat: first commit");
@@ -61,6 +65,7 @@ fn range_returns_all_commits_inclusive() {
 }
 
 #[test]
+#[serial]
 fn range_same_hash_yields_one_message() {
     let repo = TestRepo::new();
     let hash = repo.commit("feat: only commit");
@@ -77,6 +82,7 @@ fn range_same_hash_yields_one_message() {
 }
 
 #[test]
+#[serial]
 fn range_messages_are_trimmed() {
     let repo = TestRepo::new();
     let a = repo.commit("feat: first");
@@ -90,9 +96,10 @@ fn range_messages_are_trimmed() {
 }
 
 #[test]
+#[serial]
 fn range_errors_on_unknown_to_hash() {
     let repo = TestRepo::new();
-    let a = repo.commit("");
+    let a = repo.commit("feat: initial commit");
     let null = "0000000000000000000000000000000000000000";
 
     assert!(
@@ -102,6 +109,7 @@ fn range_errors_on_unknown_to_hash() {
 }
 
 #[test]
+#[serial]
 fn range_errors_on_malformed_from_hash() {
     let repo = TestRepo::new();
     repo.commit("feat: a commit");
