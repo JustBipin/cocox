@@ -1,9 +1,7 @@
 mod common;
-#[path = "../src/git_helpers.rs"]
-mod git_helpers;
 
+use cocox::git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
 use common::TestRepo;
-use git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
 use serial_test::serial;
 
 // ---- get_commit_message_from_hash ----------------------------------------
