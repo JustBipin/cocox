@@ -15,6 +15,8 @@ pub fn get_commit_message_from_hash(commit_hash: &str) -> Result<String> {
     Ok(message)
 }
 
+/// Returns commit messages for the range `from_hash..=to_hash`, inclusive on both ends,
+/// in chronological (oldest-first) order. Merge commits are excluded via `--no-merges`.
 pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Result<Vec<String>> {
     let range = format!("{}..{}", from_hash, to_hash);
 
