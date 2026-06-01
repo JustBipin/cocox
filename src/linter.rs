@@ -1,7 +1,8 @@
 use crate::constants::COMMIT_TYPES;
 use regex::Regex;
+use std::sync::LazyLock;
 
-pub fn lint_commit_message(message: &str) -> bool {
+static LINT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     let re_types = COMMIT_TYPES.join("|");
 
     let pattern = format!(
@@ -9,8 +10,11 @@ pub fn lint_commit_message(message: &str) -> bool {
         re_types
     );
 
-    let re = Regex::new(&pattern).unwrap();
-    re.is_match(message)
+    Regex::new(&pattern).unwrap()
+});
+
+pub fn lint_commit_message(message: &str) -> bool {
+    LINT_REGEX.is_match(message)
 }
 
 #[cfg(test)]

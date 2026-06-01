@@ -1,17 +1,17 @@
 use crate::constants::IGNORE_COMMIT_PATTERNS;
 use regex::Regex;
+use std::sync::LazyLock;
+
+static IGNORE_REGEXES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    IGNORE_COMMIT_PATTERNS
+        .iter()
+        .map(|&pat| Regex::new(pat).unwrap())
+        .collect()
+});
 
 pub fn is_ignored(message: &str) -> bool {
     let message = message.lines().next().unwrap();
-
-    for pattern in IGNORE_COMMIT_PATTERNS {
-        let re = Regex::new(pattern).unwrap();
-
-        if re.is_match(message) {
-            return true;
-        }
-    }
-    false
+    IGNORE_REGEXES.iter().any(|re| re.is_match(message))
 }
 
 pub fn is_empty(msg: &str) -> bool {
