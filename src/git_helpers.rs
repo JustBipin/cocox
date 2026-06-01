@@ -18,12 +18,11 @@ pub fn get_commit_message_from_hash(commit_hash: &str) -> Result<String> {
 /// Returns commit messages for the range `from_hash..=to_hash`, inclusive on both ends,
 /// in chronological (oldest-first) order. Merge commits are excluded via `--no-merges`.
 pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Result<Vec<String>> {
-    let range = format!("{}..{}", from_hash, to_hash);
-
-    // git's A..B range is exclusive of A (returns commits reachable from B
-    // but not from A). To make the range inclusive we fetch A's message
-    // separately and prepend it below.
-    let from_hash_message = get_commit_message_from_hash(from_hash)?;
+    let range = if is_orphan(from_hash)? {
+        to_hash.to_string()
+    } else {
+        format!("{}^..{}", from_hash, to_hash)
+    };
 
     let output = Command::new("git")
         .args([
@@ -49,15 +48,26 @@ pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Re
         );
     }
 
-    let mut messages: Vec<String> = String::from_utf8_lossy(&output.stdout)
+    let messages: Vec<String> = String::from_utf8_lossy(&output.stdout)
         .split('\0')
         .map(|s| s.trim()) // trim removes the trailing newline git adds to %B
         .filter(|s| !s.is_empty())
         .map(|s| s.to_owned())
         .collect();
 
-    // prepend the first message of the range
-    messages.insert(0, from_hash_message);
-
     Ok(messages)
+}
+
+pub fn is_orphan(hash: &str) -> Result<bool> {
+    let output = Command::new("git")
+        .args(["rev-list", "--parents", "-n", "1", hash])
+        .output()
+        .with_context(|| format!("failed to check parent for hash {}", hash))?;
+
+    if !output.status.success() {
+        anyhow::bail!("failed to check parent for hash {}", hash);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.split_whitespace().count() == 1)
 }

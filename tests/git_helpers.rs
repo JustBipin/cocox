@@ -1,6 +1,8 @@
 mod common;
 
-use cocox::git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
+use cocox::git_helpers::{
+    get_commit_message_from_hash, get_commit_messages_from_hash_range, is_orphan,
+};
 use common::TestRepo;
 use serial_test::serial;
 
@@ -117,4 +119,25 @@ fn range_errors_on_malformed_from_hash() {
         get_commit_messages_from_hash_range(bad, "HEAD").is_err(),
         "expected error for malformed from_hash"
     );
+}
+
+// ---- is_orphan --------------------------------------------------------
+
+#[test]
+#[serial]
+fn is_orphan_returns_true_for_root_commit() {
+    let repo = TestRepo::new();
+    let hash = repo.commit("initial commit");
+
+    assert!(is_orphan(&hash).expect("should check root commit"));
+}
+
+#[test]
+#[serial]
+fn is_orphan_returns_false_for_child_commit() {
+    let repo = TestRepo::new();
+    repo.commit("initial commit");
+    let hash = repo.commit("second commit");
+
+    assert!(!is_orphan(&hash).expect("should check child commit"));
 }
