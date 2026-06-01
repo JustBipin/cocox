@@ -1,8 +1,7 @@
 use crate::cli::Cli;
 use crate::git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
-use crate::linter::lint_commit_message;
+use crate::linter::{LintOutcome, lint_commit_message};
 use crate::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
-use crate::utils::{is_empty, is_ignored};
 use anyhow::{Context, Result};
 
 fn read_file(file: &String) -> Result<String> {
@@ -11,44 +10,44 @@ fn read_file(file: &String) -> Result<String> {
 }
 
 fn handle_commit_message(msg: &str) {
-    if is_empty(msg) {
-        eprintln!(
-            "{}: Aborting commit due to empty commit message",
-            VALIDATION_FAILED
-        );
-        std::process::exit(1);
-    }
+    match lint_commit_message(msg) {
+        LintOutcome::Empty => {
+            eprintln!(
+                "{}: Aborting commit due to empty commit message\n",
+                VALIDATION_FAILED
+            );
+            std::process::exit(1);
+        }
+        LintOutcome::Ignored => println!("commit message ignored, skipping lint\n"),
 
-    if is_ignored(msg) {
-        return;
+        LintOutcome::Valid => {
+            println!("{}\n", VALIDATION_SUCCESSFUL);
+        }
+        LintOutcome::Invalid => {
+            eprintln!("{}\n", VALIDATION_FAILED);
+            std::process::exit(1);
+        }
     }
-
-    let success = lint_commit_message(msg);
-    if success {
-        println!("{}", VALIDATION_SUCCESSFUL);
-        return;
-    }
-
-    eprintln!("{}", VALIDATION_FAILED);
-    std::process::exit(1);
 }
 
 fn handle_multiple_commit_messages(messages: &[String]) {
     let mut has_failure = false;
 
     for msg in messages {
-        if is_empty(msg) {
-            continue;
-        }
-
-        if is_ignored(msg) {
-            continue;
-        }
-
-        let success = lint_commit_message(msg);
-        if !success {
-            has_failure = true;
-            // TODO: Log proper error for individual message
+        match lint_commit_message(msg) {
+            LintOutcome::Empty => {
+                eprintln!(
+                    "{}: Aborting commit due to empty commit message\n",
+                    VALIDATION_FAILED
+                );
+                std::process::exit(1);
+            }
+            LintOutcome::Ignored => println!("commit message ignored, skipping lint\n"),
+            LintOutcome::Valid => println!("lint success\n"),
+            LintOutcome::Invalid => {
+                has_failure = true;
+                eprintln!("Lint failed \n")
+            }
         }
     }
 

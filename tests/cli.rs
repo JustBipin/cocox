@@ -95,7 +95,7 @@ fn merge_commit_is_ignored() {
         .arg("Merge pull request #123")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(predicate::str::contains("commit message ignored"))
         .stderr(predicate::str::is_empty());
 }
 
@@ -105,7 +105,7 @@ fn dependabot_bump_is_ignored() {
         .arg("Bump urllib3 from 1.26.5 to 1.26.17")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty());
+        .stdout(predicate::str::contains("commit message ignored"));
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn hash_ignored_commit_silently_succeeds() {
         .arg(&hash)
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(predicate::str::contains("commit message ignored"))
         .stderr(predicate::str::is_empty());
 }
 
