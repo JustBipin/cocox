@@ -6,6 +6,7 @@ use predicates::prelude::*;
 use serial_test::serial;
 use std::io::Write;
 use tempfile::NamedTempFile;
+use cocox::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
 
 fn cocox() -> Command {
     Command::cargo_bin("cocox").expect("cocox binary should be built")
@@ -26,7 +27,7 @@ fn valid_message_succeeds() {
         .arg("feat: add new feature")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -52,7 +53,7 @@ fn invalid_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -114,7 +115,7 @@ fn file_with_valid_message_succeeds() {
         .arg(file.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -134,7 +135,7 @@ fn file_with_invalid_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -184,7 +185,7 @@ fn hash_head_valid_commit_succeeds() {
         .arg("HEAD")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -210,7 +211,7 @@ fn hash_exact_valid_commit_succeeds() {
         .arg(&hash)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -225,7 +226,7 @@ fn hash_invalid_commit_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -257,7 +258,7 @@ fn hash_range_valid_commits_succeeds() {
         .arg(c)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -277,7 +278,7 @@ fn hash_range_invalid_commit_in_middle_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -296,7 +297,7 @@ fn hash_range_invalid_from_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -315,7 +316,7 @@ fn hash_range_invalid_to_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -334,7 +335,7 @@ fn hash_range_ignored_commits_are_skipped() {
         .arg(&c)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -351,7 +352,7 @@ fn hash_range_single_commit_succeeds() {
         .arg(&a)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -369,7 +370,7 @@ fn hash_range_single_invalid_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains("Commit validation: failed!"));
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
 }
 
 #[test]
@@ -388,7 +389,7 @@ fn from_hash_only_valid_commits_succeeds() {
         .arg(a)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Commit validation: successful!"));
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 // --- clap argument constraints --------------------------------------------
