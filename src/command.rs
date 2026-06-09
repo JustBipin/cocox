@@ -12,14 +12,9 @@ fn read_file(file: &String) -> Result<String> {
 fn handle_commit_message(msg: &str) {
     match lint_commit_message(msg) {
         LintOutcome::Empty => {
-            eprintln!(
-                "{}: Aborting commit due to empty commit message\n",
-                VALIDATION_FAILED
-            );
             std::process::exit(1);
         }
-        LintOutcome::Ignored => println!("commit message ignored, skipping lint\n"),
-
+        LintOutcome::Ignored => (),
         LintOutcome::Valid => {
             println!("{}\n", VALIDATION_SUCCESSFUL);
         }
@@ -36,17 +31,12 @@ fn handle_multiple_commit_messages(messages: &[String]) {
     for msg in messages {
         match lint_commit_message(msg) {
             LintOutcome::Empty => {
-                eprintln!(
-                    "{}: Aborting commit due to empty commit message\n",
-                    VALIDATION_FAILED
-                );
                 std::process::exit(1);
             }
-            LintOutcome::Ignored => println!("commit message ignored, skipping lint\n"),
-            LintOutcome::Valid => println!("lint success\n"),
+            LintOutcome::Ignored => (),
+            LintOutcome::Valid => (),
             LintOutcome::Invalid => {
                 has_failure = true;
-                eprintln!("Lint failed \n")
             }
         }
     }

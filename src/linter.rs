@@ -25,10 +25,6 @@ pub enum LintOutcome {
 /// Evaluates a commit message, matches the conventional commit format
 ///  and returns its linting outcome.
 pub fn lint_commit_message(message: &str) -> LintOutcome {
-    println!(
-        "========= Linting Message:: {} ===========",
-        message.lines().next().unwrap_or("")
-    );
     if is_empty(message) {
         LintOutcome::Empty
     } else if is_ignored(message) {
