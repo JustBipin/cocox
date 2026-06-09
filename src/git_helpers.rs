@@ -27,7 +27,6 @@ pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Re
     let output = Command::new("git")
         .args([
             "log",
-            "--no-merges",
             "--pretty=format:%B%x00", // null byte for delimiter
             "--reverse",
             &range,
