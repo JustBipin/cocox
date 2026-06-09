@@ -79,6 +79,8 @@ mod tests {
     fn ignores_initial_commit() {
         assert!(is_ignored("Initial commit"));
         assert!(is_ignored("initial Commit"));
+        assert!(is_ignored("Initial Commit"));
+        assert!(is_ignored("initial commit"));
     }
 
     #[test]
