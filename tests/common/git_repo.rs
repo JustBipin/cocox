@@ -13,8 +13,10 @@ impl TestRepo {
     /// Initialize a temporary test repo with git config.
     ///
     /// ## Important: Process-Global State
-    /// This function changes the current working directory of the **entire process** /// to the temporary repository. Because Cargo runs tests in parallel threads within
-    /// the same process, **any test using `TestRepo` must be marked with `#[serial]`** /// from the `serial_test` crate to prevent race conditions and cross-test interference.
+    /// This function changes the current working directory of the **entire process
+    /// to the temporary repository. Because Cargo runs tests in parallel threads within
+    /// the same process, **any test using `TestRepo` must be marked with `#[serial]`
+    /// from the `serial_test` crate to prevent race conditions and cross-test interference.
     ///
     /// The working directory will automatically reset back to the original project
     /// directory when this `TestRepo` goes out of scope (via `Drop`).
