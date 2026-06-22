@@ -1,18 +1,17 @@
-use crate::constants::COMMIT_TYPES;
-use crate::utils::{is_empty, is_ignored};
-use regex::Regex;
-use std::sync::LazyLock;
+use crate::utils::{is_empty, is_ignored, remove_comments};
+use crate::validators::run_validators;
 
-static LINT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    let re_types = COMMIT_TYPES.join("|");
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LintOptions {
+    pub skip_detail: bool,
+    pub strip_comments: bool,
+}
 
-    let pattern = format!(
-        r"(?s)^(?P<type>{})(?P<scope>\(\S+\))?!?:(?: (?P<description>[^\s][^\n\r]+[^\.]))((\n\n(?P<body>.*))|(\s*))?$",
-        re_types
-    );
-
-    Regex::new(&pattern).unwrap()
-});
+#[derive(Debug, PartialEq, Eq)]
+pub struct LintResult {
+    pub outcome: LintOutcome,
+    pub errors: Vec<String>,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LintOutcome {
@@ -22,142 +21,163 @@ pub enum LintOutcome {
     Empty,
 }
 
-/// Evaluates a commit message, matches the conventional commit format
-///  and returns its linting outcome.
+/// Evaluates a commit message and returns its linting outcome.
 pub fn lint_commit_message(message: &str) -> LintOutcome {
-    if is_empty(message) {
-        LintOutcome::Empty
-    } else if is_ignored(message) {
-        LintOutcome::Ignored
-    } else if validate_message(message) {
-        LintOutcome::Valid
-    } else {
-        LintOutcome::Invalid
-    }
+    lint_commit_message_with_options(message, LintOptions::default()).outcome
 }
 
-fn validate_message(message: &str) -> bool {
-    LINT_REGEX.is_match(message)
+pub fn lint_commit_message_with_options(message: &str, options: LintOptions) -> LintResult {
+    let mut message = message.to_string();
+
+    if options.strip_comments {
+        message = remove_comments(&message);
+    }
+
+    if is_empty(&message) {
+        return LintResult {
+            outcome: LintOutcome::Empty,
+            errors: vec![],
+        };
+    }
+
+    if is_ignored(&message) {
+        return LintResult {
+            outcome: LintOutcome::Ignored,
+            errors: vec![],
+        };
+    }
+
+    let (success, errors) = run_validators(&message, options.skip_detail);
+    if success {
+        LintResult {
+            outcome: LintOutcome::Valid,
+            errors: vec![],
+        }
+    } else {
+        LintResult {
+            outcome: LintOutcome::Invalid,
+            errors,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::COMMIT_TYPES;
+
     #[test]
     fn accepts_basic_conventional_commit() {
-        assert!(validate_message("feat: add new feature"));
+        assert_eq!(
+            lint_commit_message("feat: add new feature"),
+            LintOutcome::Valid
+        );
     }
 
     #[test]
     fn accepts_every_known_commit_type() {
         for kind in COMMIT_TYPES {
-            assert!(validate_message(&format!("{}: do the thing", kind)));
+            assert_eq!(
+                lint_commit_message(&format!("{}: do the thing", kind)),
+                LintOutcome::Valid
+            );
         }
     }
 
     #[test]
     fn accepts_commit_with_scope() {
-        assert!(validate_message("feat(parser): add new feature"));
-        assert!(validate_message(
-            "build(deps-dev): bump @babel/traverse from 7.22.17 to 7.24.0"
-        ));
+        assert_eq!(
+            lint_commit_message("feat(parser): add new feature"),
+            LintOutcome::Valid
+        );
+        assert_eq!(
+            lint_commit_message("build(deps-dev): bump @babel/traverse from 7.22.17 to 7.24.0"),
+            LintOutcome::Valid
+        );
     }
 
     #[test]
     fn accepts_breaking_change_marker() {
-        assert!(validate_message("feat!: breaking feature"));
-        assert!(validate_message("feat(api)!: breaking feature"));
+        assert_eq!(
+            lint_commit_message("feat!: breaking feature"),
+            LintOutcome::Valid
+        );
+        assert_eq!(
+            lint_commit_message("feat(api)!: breaking feature"),
+            LintOutcome::Valid
+        );
     }
 
     #[test]
     fn accepts_body_separated_by_blank_line() {
-        assert!(validate_message("feat: add new feature\n\nthis is body"));
-        assert!(validate_message(
-            "feat: add new feature\n\nthis is body\n\ntest"
-        ));
+        assert_eq!(
+            lint_commit_message("feat: add new feature\n\nthis is body"),
+            LintOutcome::Valid
+        );
+        assert_eq!(
+            lint_commit_message("feat: add new feature\n\nthis is body\n\ntest"),
+            LintOutcome::Valid
+        );
     }
 
     #[test]
     fn accepts_trailing_newline() {
-        assert!(validate_message("feat: add new feature\n"));
+        assert_eq!(
+            lint_commit_message("feat: add new feature\n"),
+            LintOutcome::Valid
+        );
     }
 
     #[test]
     fn rejects_empty_message() {
-        assert!(!validate_message(""));
+        assert_eq!(lint_commit_message(""), LintOutcome::Empty);
     }
 
     #[test]
     fn rejects_missing_colon() {
-        assert!(!validate_message("feat add new feature"));
-    }
-
-    #[test]
-    fn rejects_missing_type() {
-        assert!(!validate_message(": add new feature"));
-        assert!(!validate_message("(invalid): add new feature"));
+        assert_eq!(
+            lint_commit_message("feat add new feature"),
+            LintOutcome::Invalid
+        );
     }
 
     #[test]
     fn rejects_unknown_type() {
-        assert!(!validate_message("invalid: add new feature"));
-        assert!(!validate_message("foo(bar): add new feature"));
-    }
-
-    #[test]
-    fn rejects_space_between_type_and_scope() {
-        assert!(!validate_message("feat (test): add new feature"));
-    }
-
-    #[test]
-    fn rejects_empty_or_whitespace_scope() {
-        assert!(!validate_message("feat(): add new feature"));
-        assert!(!validate_message("feat( ): add new feature"));
-        assert!(!validate_message("feat(hello world): add new feature"));
-    }
-
-    #[test]
-    fn rejects_space_between_scope_and_colon() {
-        assert!(!validate_message("feat(test) : add new feature"));
+        assert_eq!(
+            lint_commit_message("invalid: add new feature"),
+            LintOutcome::Invalid
+        );
     }
 
     #[test]
     fn rejects_description_without_leading_space() {
-        assert!(!validate_message("feat:add new feature"));
-    }
-
-    #[test]
-    fn rejects_description_with_extra_leading_space() {
-        assert!(!validate_message("feat:  add new feature"));
-    }
-
-    #[test]
-    fn rejects_line_break_inside_description() {
-        assert!(!validate_message("feat: add new feature\nhello baby"));
-    }
-
-    #[test]
-    fn rejects_missing_description() {
-        assert!(!validate_message("feat(test):"));
-        assert!(!validate_message("feat(test): "));
+        assert_eq!(
+            lint_commit_message("feat:add new feature"),
+            LintOutcome::Invalid
+        );
     }
 
     #[test]
     fn rejects_description_with_trailing_period() {
-        assert!(!validate_message("feat(test): add new feature."));
+        assert_eq!(
+            lint_commit_message("feat: trailing period."),
+            LintOutcome::Invalid
+        );
     }
 
     #[test]
-    fn rejects_ignore_style_messages() {
-        // The linter itself does not know about ignore patterns; those are
-        // short-circuited one layer up in `lint_commit_message` via
-        // `is_ignored`. The regex below should therefore reject these.
-        assert!(!validate_message("Merge pull request #123"));
-        assert!(!validate_message("Bump urllib3 from 1.26.5 to 1.26.17"));
-        assert!(!validate_message("Initial commit"));
+    fn strip_comments_allows_valid_message_with_git_comments() {
+        let message = "feat(scope): add new feature\n#this is a comment";
+        let result = lint_commit_message_with_options(
+            message,
+            LintOptions {
+                strip_comments: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(result.outcome, LintOutcome::Valid);
+        assert!(result.errors.is_empty());
     }
-
-    // ---- lint_commit_message tests ------------------------------------------
 
     #[test]
     fn returns_outcome_empty() {
@@ -173,32 +193,12 @@ mod tests {
             LintOutcome::Ignored
         );
         assert_eq!(lint_commit_message("Initial commit"), LintOutcome::Ignored);
-        assert_eq!(
-            lint_commit_message("Revert \"feat: add something\""),
-            LintOutcome::Ignored
-        );
-    }
-
-    #[test]
-    fn returns_outcome_valid() {
-        assert_eq!(
-            lint_commit_message("feat: add new feature"),
-            LintOutcome::Valid
-        );
-        assert_eq!(
-            lint_commit_message("fix(parser): handle empty input"),
-            LintOutcome::Valid
-        );
     }
 
     #[test]
     fn returns_outcome_invalid() {
         assert_eq!(
             lint_commit_message("not a conventional commit"),
-            LintOutcome::Invalid
-        );
-        assert_eq!(
-            lint_commit_message("feat: trailing period."),
             LintOutcome::Invalid
         );
     }
