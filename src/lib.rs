@@ -5,3 +5,4 @@ pub mod git_helpers;
 pub mod linter;
 pub mod messages;
 pub mod utils;
+pub mod validators;
