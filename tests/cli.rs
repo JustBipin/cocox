@@ -1,7 +1,7 @@
 mod common;
 
 use assert_cmd::Command;
-use cocox::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
+use cocox::messages::{INCORRECT_FORMAT_ERROR, VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
 use common::TestRepo;
 use predicates::prelude::*;
 use serial_test::serial;
@@ -53,7 +53,9 @@ fn invalid_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains("⧗ Input:"))
+        .stderr(predicate::str::contains("✖ Found 1 error(s)."))
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -135,7 +137,7 @@ fn file_with_invalid_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -226,7 +228,7 @@ fn hash_invalid_commit_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -278,7 +280,7 @@ fn hash_range_invalid_commit_in_middle_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -297,7 +299,7 @@ fn hash_range_invalid_from_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -316,7 +318,7 @@ fn hash_range_invalid_to_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -370,7 +372,7 @@ fn hash_range_single_invalid_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -551,5 +553,122 @@ fn help_flag_succeeds() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Conventional Commitlint"));
+        .stdout(predicate::str::contains("conventional commit format"));
+}
+
+// --- output flags ----------------------------------------------------------
+
+#[test]
+fn skip_detail_invalid_message_shows_failed_without_details() {
+    cocox()
+        .arg("--skip-detail")
+        .arg("Invalid commit message")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(VALIDATION_FAILED))
+        .stderr(predicate::str::contains("⧗ Input:"))
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR).not());
+}
+
+#[test]
+fn skip_detail_valid_message_succeeds() {
+    cocox()
+        .arg("--skip-detail")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
+}
+
+#[test]
+fn hide_input_invalid_message_hides_input_section() {
+    cocox()
+        .arg("--hide-input")
+        .arg("Invalid commit message")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("⧗ Input:").not())
+        .stderr(predicate::str::contains("✖ Found 1 error(s)."))
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
+}
+
+#[test]
+fn quiet_valid_message_suppresses_output() {
+    cocox()
+        .arg("--quiet")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn quiet_invalid_message_suppresses_output_but_fails() {
+    cocox()
+        .arg("--quiet")
+        .arg("Invalid commit message")
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn verbose_valid_message_prints_debug_output() {
+    cocox()
+        .arg("--verbose")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("starting cocox"))
+        .stdout(predicate::str::contains(
+            "commit message source: direct message",
+        ));
+}
+
+#[test]
+fn quiet_and_verbose_together_fail() {
+    cocox()
+        .arg("--quiet")
+        .arg("--verbose")
+        .arg("feat: valid commit message")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "the argument '--quiet' cannot be used with '--verbose'",
+        ));
+}
+
+#[test]
+fn short_version_flag_succeeds() {
+    cocox()
+        .arg("-V")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("cocox"));
+}
+
+#[test]
+fn short_quiet_flag_succeeds() {
+    cocox()
+        .arg("-q")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn short_verbose_flag_succeeds() {
+    cocox()
+        .arg("-v")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("starting cocox"));
 }
