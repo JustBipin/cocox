@@ -1,11 +1,6 @@
+use crate::config::config;
 use crate::utils::{is_empty, is_ignored, remove_comments};
 use crate::validators::run_validators;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct LintOptions {
-    pub skip_detail: bool,
-    pub strip_comments: bool,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct LintResult {
@@ -23,10 +18,11 @@ pub enum LintOutcome {
 
 /// Evaluates a commit message and returns its linting outcome.
 pub fn lint_commit_message(message: &str) -> LintOutcome {
-    lint_commit_message_with_options(message, LintOptions::default()).outcome
+    lint_commit_message_with_errors(message).outcome
 }
 
-pub fn lint_commit_message_with_options(message: &str, options: LintOptions) -> LintResult {
+pub fn lint_commit_message_with_errors(message: &str) -> LintResult {
+    let options = config();
     let mut message = message.to_string();
 
     if options.strip_comments {
@@ -64,6 +60,7 @@ pub fn lint_commit_message_with_options(message: &str, options: LintOptions) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{Config, ConfigGuard};
     use crate::constants::COMMIT_TYPES;
 
     #[test]
@@ -167,14 +164,12 @@ mod tests {
 
     #[test]
     fn strip_comments_allows_valid_message_with_git_comments() {
+        let _guard = ConfigGuard::set(Config {
+            strip_comments: true,
+            ..Default::default()
+        });
         let message = "feat(scope): add new feature\n#this is a comment";
-        let result = lint_commit_message_with_options(
-            message,
-            LintOptions {
-                strip_comments: true,
-                ..Default::default()
-            },
-        );
+        let result = lint_commit_message_with_errors(message);
         assert_eq!(result.outcome, LintOutcome::Valid);
         assert!(result.errors.is_empty());
     }
