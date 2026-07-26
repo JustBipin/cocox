@@ -1,16 +1,9 @@
-mod cli;
-mod command;
-mod constants;
-mod git_helpers;
-mod linter;
-mod messages;
-mod utils;
-
 use anyhow::Result;
 use clap::Parser;
-use cli::Cli;
+use cocox::cli::Cli;
+use cocox::command;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
-    return command::run(args);
+    command::run(args)
 }

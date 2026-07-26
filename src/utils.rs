@@ -1,21 +1,19 @@
 use crate::constants::IGNORE_COMMIT_PATTERNS;
-use regex::Regex;
+use regex::RegexSet;
+use std::sync::LazyLock;
+
+static IGNORE_SET: LazyLock<RegexSet> =
+    LazyLock::new(|| RegexSet::new(IGNORE_COMMIT_PATTERNS).unwrap());
 
 pub fn is_ignored(message: &str) -> bool {
-    let message = message.lines().next().unwrap();
-
-    for pattern in IGNORE_COMMIT_PATTERNS {
-        let re = Regex::new(pattern).unwrap();
-
-        if re.is_match(message) {
-            return true;
-        }
-    }
-    return false;
+    message
+        .lines()
+        .next()
+        .is_some_and(|line| IGNORE_SET.is_match(line))
 }
 
 pub fn is_empty(msg: &str) -> bool {
-    return msg.trim().is_empty();
+    msg.trim().is_empty()
 }
 
 #[cfg(test)]
@@ -52,7 +50,9 @@ mod tests {
     fn ignores_bitbucket_style_merged() {
         assert!(is_ignored("Merged bugfix-789 in master"));
         assert!(is_ignored("Merged PR #987: Update documentation"));
-        assert!(is_ignored("Merged PR #321: Bugfix - Resolve issue with login"));
+        assert!(is_ignored(
+            "Merged PR #321: Bugfix - Resolve issue with login"
+        ));
     }
 
     #[test]
@@ -79,6 +79,8 @@ mod tests {
     fn ignores_initial_commit() {
         assert!(is_ignored("Initial commit"));
         assert!(is_ignored("initial Commit"));
+        assert!(is_ignored("Initial Commit"));
+        assert!(is_ignored("initial commit"));
     }
 
     #[test]
