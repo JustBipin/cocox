@@ -1,12 +1,13 @@
 mod common;
 
 use assert_cmd::Command;
+use cocox::messages::header_length_error;
+use cocox::messages::{INCORRECT_FORMAT_ERROR, VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
 use common::TestRepo;
 use predicates::prelude::*;
 use serial_test::serial;
 use std::io::Write;
 use tempfile::NamedTempFile;
-use cocox::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
 
 fn cocox() -> Command {
     Command::cargo_bin("cocox").expect("cocox binary should be built")
@@ -53,7 +54,9 @@ fn invalid_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains("⧗ Input:"))
+        .stderr(predicate::str::contains("✖ Found 1 error(s)."))
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -135,7 +138,7 @@ fn file_with_invalid_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -226,7 +229,7 @@ fn hash_invalid_commit_message_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -278,7 +281,7 @@ fn hash_range_invalid_commit_in_middle_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -297,7 +300,7 @@ fn hash_range_invalid_from_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -316,7 +319,7 @@ fn hash_range_invalid_to_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -370,7 +373,7 @@ fn hash_range_single_invalid_commit_fails() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::str::contains(VALIDATION_FAILED));
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
 }
 
 #[test]
@@ -551,5 +554,274 @@ fn help_flag_succeeds() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Conventional Commitlint"));
+        .stdout(predicate::str::contains("conventional commit format"));
+}
+
+// --- output flags ----------------------------------------------------------
+
+#[test]
+fn skip_detail_invalid_message_shows_failed_without_details() {
+    cocox()
+        .arg("--skip-detail")
+        .arg("Invalid commit message")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(VALIDATION_FAILED))
+        .stderr(predicate::str::contains("⧗ Input:"))
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR).not());
+}
+
+#[test]
+fn skip_detail_valid_message_succeeds() {
+    cocox()
+        .arg("--skip-detail")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
+}
+
+#[test]
+fn hide_input_invalid_message_hides_input_section() {
+    cocox()
+        .arg("--hide-input")
+        .arg("Invalid commit message")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("⧗ Input:").not())
+        .stderr(predicate::str::contains("✖ Found 1 error(s)."))
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
+}
+
+#[test]
+fn quiet_valid_message_suppresses_output() {
+    cocox()
+        .arg("--quiet")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn quiet_invalid_message_suppresses_output_but_fails() {
+    cocox()
+        .arg("--quiet")
+        .arg("Invalid commit message")
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn verbose_valid_message_prints_debug_output() {
+    cocox()
+        .arg("--verbose")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("starting cocox"))
+        .stdout(predicate::str::contains(
+            "commit message source: direct message",
+        ));
+}
+
+#[test]
+fn quiet_and_verbose_together_fail() {
+    cocox()
+        .arg("--quiet")
+        .arg("--verbose")
+        .arg("feat: valid commit message")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "the argument '--quiet' cannot be used with '--verbose'",
+        ));
+}
+
+#[test]
+fn short_version_flag_succeeds() {
+    cocox()
+        .arg("-V")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("cocox"));
+}
+
+#[test]
+fn short_quiet_flag_succeeds() {
+    cocox()
+        .arg("-q")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn short_verbose_flag_succeeds() {
+    cocox()
+        .arg("-v")
+        .arg("feat: valid commit message")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("starting cocox"));
+}
+
+// --- max-header-length ---------------------------------------------------
+
+#[test]
+fn max_header_length_long_header_fails() {
+    let long_header = format!("feat: {}", "a".repeat(100));
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg(&long_header)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(header_length_error(72)));
+}
+
+#[test]
+fn max_header_length_short_header_succeeds() {
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg("feat: short message")
+        .assert()
+        .success();
+}
+
+#[test]
+fn max_header_length_not_set_allows_long_header() {
+    let long_header = format!("feat: {}", "a".repeat(200));
+    cocox().arg(&long_header).assert().success();
+}
+
+#[test]
+fn max_header_length_custom_value() {
+    let msg = "feat: this is a twenty five charac"; // 34 chars
+    cocox()
+        .arg("--max-header-length")
+        .arg("10")
+        .arg(msg)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(header_length_error(10)));
+}
+
+#[test]
+fn max_header_length_zero_fails_clap() {
+    cocox()
+        .arg("--max-header-length")
+        .arg("0")
+        .arg("feat: message")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("positive integer"));
+}
+
+#[test]
+fn max_header_length_negative_fails_clap() {
+    cocox()
+        .arg("--max-header-length")
+        .arg("-5")
+        .arg("feat: message")
+        .assert()
+        .failure()
+        .code(2);
+}
+
+#[test]
+fn max_header_length_string_fails_clap() {
+    cocox()
+        .arg("--max-header-length")
+        .arg("abc")
+        .arg("feat: message")
+        .assert()
+        .failure()
+        .code(2);
+}
+
+#[test]
+fn max_header_length_with_skip_detail() {
+    let long_header = format!("feat: {}", "a".repeat(100));
+    // With --skip-detail, detailed errors are suppressed.
+    // The output shows the input and VALIDATION_FAILED, but not the error text.
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg("--skip-detail")
+        .arg(&long_header)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(VALIDATION_FAILED))
+        .stderr(predicate::str::contains("⧗ Input:"))
+        .stderr(predicate::str::contains(header_length_error(72)).not())
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR).not());
+}
+
+#[test]
+fn max_header_length_with_file() {
+    let long_header = format!("feat: {}", "a".repeat(100));
+    let file = write_temp(&long_header);
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg("--file")
+        .arg(file.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(header_length_error(72)));
+}
+
+#[test]
+#[serial]
+fn max_header_length_with_hash() {
+    let repo = TestRepo::new();
+    let long_header = format!("feat: {}", "a".repeat(100));
+    let hash = repo.commit(&long_header);
+
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg("--hash")
+        .arg(&hash)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(header_length_error(72)));
+}
+
+#[test]
+#[serial]
+fn max_header_length_with_hash_range() {
+    let repo = TestRepo::new();
+    let a = repo.commit("feat: short");
+    let long_header = format!("feat: {}", "a".repeat(100));
+    repo.commit(&long_header);
+    let c = repo.commit("fix: short");
+
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg("--from-hash")
+        .arg(a)
+        .arg("--to-hash")
+        .arg(c)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(header_length_error(72)));
 }
