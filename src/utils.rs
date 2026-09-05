@@ -16,6 +16,55 @@ pub fn is_empty(msg: &str) -> bool {
     msg.trim().is_empty()
 }
 
+const VERBOSE_COMMIT_SEPARATOR: &str = "# ------------------------ >8 ------------------------";
+
+/// Removes commit diff appended by `git commit --verbose`.
+pub fn remove_diff_from_commit_message(commit_message: &str) -> &str {
+    commit_message
+        .split(VERBOSE_COMMIT_SEPARATOR)
+        .next()
+        .unwrap_or(commit_message)
+        .trim_end()
+}
+
+/// Removes git comment lines (starting with `#`) from a commit message file.
+pub fn remove_comments(commit_message: &str) -> String {
+    let commit_message = remove_diff_from_commit_message(commit_message);
+
+    commit_message
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(test)]
+mod comment_tests {
+    use super::*;
+
+    #[test]
+    fn remove_diff_strips_verbose_commit_trailer() {
+        let message = "feat: add feature\n\n# ------------------------ >8 ------------------------\ndiff --git a/foo b/foo";
+        assert_eq!(
+            remove_diff_from_commit_message(message),
+            "feat: add feature"
+        );
+    }
+
+    #[test]
+    fn remove_comments_strips_hash_lines() {
+        let message = "feat: add new feature\n\n# This is a git comment\n# It should be ignored";
+        assert_eq!(remove_comments(message), "feat: add new feature\n");
+    }
+
+    #[test]
+    fn remove_comments_also_strips_verbose_diff() {
+        let message =
+            "feat: add feature\n# ------------------------ >8 ------------------------\ndiff --git";
+        assert_eq!(remove_comments(message), "feat: add feature");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
