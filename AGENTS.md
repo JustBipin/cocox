@@ -92,8 +92,7 @@ separate pull requests. This list is what has been measured, not everything that
 2. A CRLF message file fails here and passes upstream.
 3. `Initial commit\x0cgarbage` is linted here and ignored upstream, per trap 5.
 4. A trailing `\x1c` to `\x1f` survives `trim()` here and is stripped upstream.
-5. `COMMIT_TYPES` lists `bump` second; upstream lists it last, per trap 7.
-6. A missing `--file` prints a multi-line anyhow chain; upstream prints one line,
+5. A missing `--file` prints a multi-line anyhow chain; upstream prints one line,
    `Error: file '<path>' not found`.
 
 ## Working rules
@@ -166,9 +165,6 @@ tests/
 `ConfigGuard` exists primarily to isolate tests that temporarily modify
 global configuration.
 
-**Do not replace this with a different configuration architecture unless
-explicitly requested.**
-
 ## Compatibility Requirements
 
 Unless explicitly requested otherwise, preserve:
@@ -181,7 +177,7 @@ Unless explicitly requested otherwise, preserve:
 - Commit parsing rules and regex semantics
 - Ignore patterns (merge, revert, bump, initial commit, etc.)
 - Header-length semantics
-- Git hash/range behavior (inclusive, orphan handling)
+- Git hash/range behavior (inclusive)
 - Comment/diff stripping behavior
 
 ## Dependencies
@@ -218,7 +214,7 @@ Current development dependencies:
 
 ## Feature Parity Checklist (Python → Rust)
 
-### ✅ All Complete
+### Completed
 
 - [x] CLI: positional message, `--file`, `--hash`, `--from-hash`/`--to-hash`
 - [x] CLI: `--skip-detail`, `--hide-input`, `-q`/`--quiet`, `-v`/`--verbose`, `-V`/`--version`
@@ -226,15 +222,15 @@ Current development dependencies:
 - [x] CLI: mutual exclusion via clap ArgGroup
 - [x] Config: OutputConfig (quiet/verbose), skip_detail, hide_input, strip_comments, max_header_length
 - [x] Console: green/red colored output, respects quiet/verbose
-- [x] Constants: 12 commit types, 9 ignore patterns, header max length (72)
+- [x] Constants: 12 commit types (upstream order), 9 ignore patterns, header max length (72)
 - [x] Messages: all error strings matching Python (dynamic header_length_error)
 - [x] Linter: LintOutcome (Valid/Invalid/Ignored/Empty), LintResult with errors
 - [x] Validators: simple regex pattern, detailed pattern with per-field validation
-- [x] Validators: header length check (dynamic max, not hardcoded)
+- [x] Validators: header length check (dynamic max, character-based)
 - [x] Utils: is_ignored (RegexSet), is_empty, remove_diff, remove_comments
-- [x] Git helpers: get_commit_message_from_hash, get_commit_messages_from_hash_range, is_orphan
-- [x] Tests: 75+ integration tests covering all CLI paths, output flags, hash ranges, max-header-length
-- [x] Tests: 43 unit tests for validators, utils, linter
+- [x] Git helpers: get_commit_message_from_hash, get_commit_messages_from_hash_range
+- [x] Tests: 81 integration tests covering all CLI paths, output flags, hash ranges, max-header-length
+- [x] Tests: 60 unit tests for validators, utils, linter
 
 ## Validation
 

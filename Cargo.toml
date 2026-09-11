@@ -5,7 +5,8 @@ edition = "2024"
 # Comes from edition 2024, not from any language feature in the source.
 # Verified: `cargo +1.84.0 build` fails with "feature `edition2024` is required".
 # Raise this in the same commit that introduces a newer feature.
-rust-version = "1.85"
+# Let chains (used in src/validators.rs) require Rust 1.88.
+rust-version = "1.88"
 license = "GPL-3.0"
 repository = "https://github.com/opensource-nepal/cocox"
 homepage = "https://github.com/opensource-nepal/cocox"
