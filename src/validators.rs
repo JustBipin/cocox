@@ -26,7 +26,8 @@ static DETAILED_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 
 pub fn validate_header_length(message: &str, max: usize) -> Option<String> {
     let header = message.lines().next().unwrap_or("");
-    if header.len() > max {
+    // Upstream counts code points (Python `len(header)`), not UTF-8 bytes.
+    if header.chars().count() > max {
         Some(header_length_error(max))
     } else {
         None
@@ -82,6 +83,9 @@ fn validate_commit_type(captures: &regex::Captures<'_>) -> Option<String> {
 }
 
 fn validate_commit_type_no_space_after(captures: &regex::Captures<'_>) -> Option<String> {
+    // Upstream: `if group and group.endswith(" "):` returns error.
+    // The `?` early return matches upstream because if `type` is None,
+    // INCORRECT_FORMAT_ERROR was already returned by the caller.
     let commit_type = captures.name("type")?.as_str();
     commit_type
         .ends_with(' ')
@@ -89,6 +93,9 @@ fn validate_commit_type_no_space_after(captures: &regex::Captures<'_>) -> Option
 }
 
 fn validate_scope(captures: &regex::Captures<'_>) -> Option<String> {
+    // Upstream: `if group and group == "":` / `if group and " " in group:`.
+    // The `?` early return matches upstream because if `scope` is None,
+    // no scope was captured and no scope error applies.
     let scope = captures.name("scope")?.as_str();
     if scope.is_empty() {
         Some(SCOPE_EMPTY_ERROR.to_string())
@@ -100,6 +107,9 @@ fn validate_scope(captures: &regex::Captures<'_>) -> Option<String> {
 }
 
 fn validate_scope_no_space_after(captures: &regex::Captures<'_>) -> Option<String> {
+    // Upstream: `if group and " " in group:` returns error.
+    // The `?` early return matches upstream because if `space_after_scope` is None,
+    // no scope was captured.
     let space_after_scope = captures.name("space_after_scope")?.as_str();
     space_after_scope
         .contains(' ')
@@ -107,11 +117,16 @@ fn validate_scope_no_space_after(captures: &regex::Captures<'_>) -> Option<Strin
 }
 
 fn validate_description(captures: &regex::Captures<'_>) -> Option<String> {
-    let description = captures.name("description")?;
-    if description.as_str().is_empty() {
+    // Upstream: `if not self.re_match.group("description"):` returns error.
+    let description = captures.name("description").map_or("", |m| m.as_str());
+    if description.is_empty() {
         return Some(DESCRIPTION_MISSING_ERROR.to_string());
     }
 
+    // Upstream: `if group and not group.startswith(" "):` returns error.
+    // The `?` early return here matches the upstream `if group and ...` logic
+    // because if `colon` is None, there is no colon and INCORRECT_FORMAT_ERROR
+    // was already returned by the caller.
     let colon = captures.name("colon")?.as_str();
     if !colon.ends_with(' ') {
         return Some(DESCRIPTION_NO_LEADING_SPACE_ERROR.to_string());
@@ -121,6 +136,9 @@ fn validate_description(captures: &regex::Captures<'_>) -> Option<String> {
 }
 
 fn validate_description_no_multiple_whitespace(captures: &regex::Captures<'_>) -> Option<String> {
+    // Upstream: `if group and group.startswith(" "):` returns error.
+    // The `?` early return matches upstream because if `description` is None,
+    // `validate_description` already reported DESCRIPTION_MISSING_ERROR.
     let description = captures.name("description")?.as_str();
     description
         .starts_with(' ')
@@ -128,6 +146,9 @@ fn validate_description_no_multiple_whitespace(captures: &regex::Captures<'_>) -
 }
 
 fn validate_description_no_line_break(captures: &regex::Captures<'_>) -> Option<String> {
+    // Upstream: `if body_separation == "\n" and body:` returns error.
+    // The `?` early return matches upstream because if `body_separation` is None,
+    // no body separation was captured.
     let body_separation = captures.name("body_separation")?.as_str();
     let body = captures.name("body").map(|m| m.as_str()).unwrap_or("");
     (body_separation == "\n" && !body.is_empty())
@@ -135,6 +156,9 @@ fn validate_description_no_line_break(captures: &regex::Captures<'_>) -> Option<
 }
 
 fn validate_description_no_full_stop_at_end(captures: &regex::Captures<'_>) -> Option<String> {
+    // Upstream: `if group and group.endswith("."):` returns error.
+    // The `?` early return matches upstream because if `description` is None,
+    // `validate_description` already reported DESCRIPTION_MISSING_ERROR.
     let description = captures.name("description")?.as_str().trim();
     description
         .ends_with('.')
@@ -155,7 +179,7 @@ pub fn run_validators(
         }
         let mut errors = vec![error];
         errors.extend(validate_detailed_pattern(message));
-        return (errors.is_empty(), errors);
+        return (false, errors);
     }
 
     if skip_detail {
@@ -203,6 +227,18 @@ mod tests {
     }
 
     #[test]
+    fn header_length_counts_chars_not_bytes() {
+        // "feat: नमस्ते संसार" is 18 chars, 40 bytes.
+        let message = "feat: नमस्ते संसार";
+        assert!(validate_header_length(message, 20).is_none());
+        assert!(validate_header_length(message, 18).is_none());
+        assert_eq!(
+            validate_header_length(message, 17),
+            Some(header_length_error(17))
+        );
+    }
+
+    #[test]
     fn skip_detail_returns_only_header_length_error() {
         let message = format!("Test {}", "a".repeat(COMMIT_HEADER_MAX_LENGTH + 1));
         let (success, errors) = run_validators(&message, true, Some(COMMIT_HEADER_MAX_LENGTH));
@@ -219,7 +255,6 @@ mod tests {
 
     #[test]
     fn no_header_length_check_when_none() {
-        // When max_header_length is None, long headers are accepted.
         let message = format!("feat: {}", "a".repeat(COMMIT_HEADER_MAX_LENGTH + 100));
         let (success, errors) = run_validators(&message, false, None);
         assert!(success);
@@ -229,10 +264,122 @@ mod tests {
     #[test]
     fn custom_max_header_length_is_respected() {
         let message = "feat: this is exactly 25 characters long";
-        // 39 chars, should fail with max=10
         let (success, errors) = run_validators(message, false, Some(10));
         assert!(!success);
         assert!(errors.contains(&header_length_error(10).to_string()));
+    }
+
+    // --- upstream linter fixture tests (all 13 error messages) ---
+
+    #[test]
+    fn accepts_valid_commit() {
+        let (ok, errors) = run_validators("feat: add new feature", false, None);
+        assert!(ok);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn rejects_missing_type() {
+        let (ok, errors) = run_validators(": add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&COMMIT_TYPE_MISSING_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_invalid_type() {
+        let (ok, errors) = run_validators("invalid: add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&commit_type_invalid_error("invalid")));
+    }
+
+    #[test]
+    fn rejects_space_after_commit_type() {
+        let (ok, errors) = run_validators("feat (test): add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&SPACE_AFTER_COMMIT_TYPE_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_empty_scope() {
+        let (ok, errors) = run_validators("feat(): add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&SCOPE_EMPTY_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_scope_with_whitespace() {
+        let (ok, errors) = run_validators("feat( ): add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&SCOPE_WHITESPACE_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_scope_with_space_after() {
+        let (ok, errors) = run_validators("feat(test) : add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&SPACE_AFTER_SCOPE_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_description_no_leading_space() {
+        let (ok, errors) = run_validators("feat:add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&DESCRIPTION_NO_LEADING_SPACE_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_description_multiple_spaces() {
+        let (ok, errors) = run_validators("feat:  add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&DESCRIPTION_MULTIPLE_SPACE_START_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_description_line_break() {
+        let (ok, errors) = run_validators("feat: add new feature\nhello baby", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&DESCRIPTION_LINE_BREAK_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_missing_description() {
+        let (ok, errors) = run_validators("feat(test):", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&DESCRIPTION_MISSING_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_description_trailing_full_stop() {
+        let (ok, errors) = run_validators("feat: add new feature.", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&DESCRIPTION_FULL_STOP_END_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_incorrect_format() {
+        let (ok, errors) = run_validators("feat add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&INCORRECT_FORMAT_ERROR.to_string()));
+    }
+
+    #[test]
+    fn rejects_multiple_errors() {
+        // space after type + space after scope
+        let (ok, errors) = run_validators("feat (test) : add new feature", false, None);
+        assert!(!ok);
+        assert!(errors.contains(&SPACE_AFTER_COMMIT_TYPE_ERROR.to_string()));
+        assert!(errors.contains(&SPACE_AFTER_SCOPE_ERROR.to_string()));
+    }
+
+    #[test]
+    fn accepts_every_known_commit_type() {
+        for kind in COMMIT_TYPES {
+            let (ok, errors) = run_validators(&format!("{}: do the thing", kind), false, None);
+            assert!(
+                ok,
+                "type {kind:?} should be accepted, got errors: {errors:?}"
+            );
+        }
     }
 
     #[test]
