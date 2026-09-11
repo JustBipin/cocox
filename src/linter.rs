@@ -156,6 +156,12 @@ mod tests {
     }
 
     #[test]
+    fn rejects_missing_description() {
+        assert_eq!(lint_commit_message("feat:"), LintOutcome::Invalid);
+        assert_eq!(lint_commit_message("feat(test):"), LintOutcome::Invalid);
+    }
+
+    #[test]
     fn rejects_description_with_trailing_period() {
         assert_eq!(
             lint_commit_message("feat: trailing period."),

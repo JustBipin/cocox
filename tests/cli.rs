@@ -2,6 +2,12 @@ mod common;
 
 use assert_cmd::Command;
 use cocox::messages::header_length_error;
+use cocox::messages::{
+    COMMIT_TYPE_MISSING_ERROR, DESCRIPTION_FULL_STOP_END_ERROR, DESCRIPTION_MISSING_ERROR,
+    DESCRIPTION_MULTIPLE_SPACE_START_ERROR, DESCRIPTION_NO_LEADING_SPACE_ERROR, SCOPE_EMPTY_ERROR,
+    SCOPE_WHITESPACE_ERROR, SPACE_AFTER_COMMIT_TYPE_ERROR, SPACE_AFTER_SCOPE_ERROR,
+    commit_type_invalid_error,
+};
 use cocox::messages::{INCORRECT_FORMAT_ERROR, VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
 use common::TestRepo;
 use predicates::prelude::*;
@@ -554,7 +560,38 @@ fn help_flag_succeeds() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("conventional commit format"));
+        .stdout(predicate::str::contains(
+            "Conventional Commitlint binary tool",
+        ));
+}
+
+#[test]
+fn help_flag_shows_descriptions_for_all_flags() {
+    let output = cocox()
+        .arg("--help")
+        .output()
+        .expect("failed to run --help");
+    let help = String::from_utf8_lossy(&output.stdout);
+
+    let expected_help = [
+        "The commit message to be checked",
+        "Lint the message in a file",
+        "Lint the message of one commit",
+        "Inclusive lower bound",
+        "Inclusive upper bound",
+        "Skip the detailed error message check",
+        "Hide input from stdout",
+        "Ignore stdout and stderr",
+        "Verbose output",
+        "Maximum header length",
+    ];
+
+    for text in &expected_help {
+        assert!(
+            help.contains(text),
+            "help output missing expected text: {text}\n\nFull help:\n{help}"
+        );
+    }
 }
 
 // --- output flags ----------------------------------------------------------
@@ -738,7 +775,8 @@ fn max_header_length_negative_fails_clap() {
         .arg("feat: message")
         .assert()
         .failure()
-        .code(2);
+        .code(2)
+        .stderr(predicate::str::contains("positive integer"));
 }
 
 #[test]
@@ -824,4 +862,176 @@ fn max_header_length_with_hash_range() {
         .failure()
         .code(1)
         .stderr(predicate::str::contains(header_length_error(72)));
+}
+
+// --- per-field error messages (CLI end-to-end) ----------------------------
+
+#[test]
+fn cli_rejects_missing_type() {
+    cocox()
+        .arg(": add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(COMMIT_TYPE_MISSING_ERROR));
+}
+
+#[test]
+fn cli_rejects_invalid_type() {
+    cocox()
+        .arg("wip: something")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(commit_type_invalid_error("wip")));
+}
+
+#[test]
+fn cli_rejects_space_after_commit_type() {
+    cocox()
+        .arg("feat (test): add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(SPACE_AFTER_COMMIT_TYPE_ERROR));
+}
+
+#[test]
+fn cli_rejects_empty_scope() {
+    cocox()
+        .arg("feat(): add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(SCOPE_EMPTY_ERROR));
+}
+
+#[test]
+fn cli_rejects_scope_whitespace() {
+    cocox()
+        .arg("feat( ): add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(SCOPE_WHITESPACE_ERROR));
+}
+
+#[test]
+fn cli_rejects_space_after_scope() {
+    cocox()
+        .arg("feat(test) : add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(SPACE_AFTER_SCOPE_ERROR));
+}
+
+#[test]
+fn cli_rejects_description_no_leading_space() {
+    cocox()
+        .arg("feat:add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(DESCRIPTION_NO_LEADING_SPACE_ERROR));
+}
+
+#[test]
+fn cli_rejects_description_multiple_spaces() {
+    cocox()
+        .arg("feat:  add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(
+            DESCRIPTION_MULTIPLE_SPACE_START_ERROR,
+        ));
+}
+
+#[test]
+fn cli_rejects_description_line_break() {
+    cocox()
+        .arg("feat: add new feature\nhello baby")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "Description cannot contain line breaks.",
+        ));
+}
+
+#[test]
+fn cli_rejects_missing_description() {
+    cocox()
+        .arg("feat(test):")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(DESCRIPTION_MISSING_ERROR));
+}
+
+#[test]
+fn cli_rejects_description_trailing_full_stop() {
+    cocox()
+        .arg("feat: add new feature.")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(DESCRIPTION_FULL_STOP_END_ERROR));
+}
+
+#[test]
+fn cli_rejects_multiple_errors() {
+    cocox()
+        .arg("feat (test) : add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Found 2 error(s)."))
+        .stderr(predicate::str::contains(SPACE_AFTER_COMMIT_TYPE_ERROR))
+        .stderr(predicate::str::contains(SPACE_AFTER_SCOPE_ERROR));
+}
+
+#[test]
+fn cli_rejects_invalid_type_and_space_after_type() {
+    cocox()
+        .arg("invalid (test): add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Found 2 error(s)."))
+        .stderr(predicate::str::contains(commit_type_invalid_error(
+            "invalid",
+        )))
+        .stderr(predicate::str::contains(SPACE_AFTER_COMMIT_TYPE_ERROR));
+}
+
+#[test]
+fn cli_rejects_scope_whitespace_with_space() {
+    cocox()
+        .arg("feat(hello world): add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(SCOPE_WHITESPACE_ERROR));
+}
+
+#[test]
+fn cli_rejects_paren_without_type() {
+    cocox()
+        .arg("(invalid): add new feature")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(COMMIT_TYPE_MISSING_ERROR));
+}
+
+#[test]
+fn cli_rejects_missing_description_empty_after_colon() {
+    cocox()
+        .arg("feat(test): ")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(DESCRIPTION_MISSING_ERROR));
 }
