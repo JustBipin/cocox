@@ -4,7 +4,7 @@ use crate::console;
 use crate::git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
 use crate::linter::{LintOutcome, lint_commit_message_with_errors};
 use crate::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
-use crate::utils::remove_diff_from_commit_message;
+use crate::utils::{normalize_newlines, remove_diff_from_commit_message};
 use anyhow::{Context, Result};
 
 impl Config {
@@ -20,9 +20,9 @@ impl Config {
 }
 
 fn read_file(file: &str) -> Result<String> {
-    std::fs::read_to_string(file)
-        .with_context(|| format!("failed to read commit message file `{}`", file))
-        .map(|content| content.trim().to_string())
+    let content = std::fs::read_to_string(file)
+        .with_context(|| format!("failed to read commit message file `{}`", file))?;
+    Ok(normalize_newlines(&content).trim().to_string())
 }
 
 fn show_errors(message: &str, errors: &[String]) {

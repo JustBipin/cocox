@@ -1,3 +1,4 @@
+use crate::utils::normalize_newlines;
 use anyhow::{Context, Result};
 use std::process::Command;
 
@@ -11,7 +12,8 @@ pub fn get_commit_message_from_hash(commit_hash: &str) -> Result<String> {
         anyhow::bail!("failed to retrieve commit message for hash {}", commit_hash);
     }
 
-    let message = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let message = normalize_newlines(&raw).trim().to_string();
     Ok(message)
 }
 
@@ -47,7 +49,9 @@ pub fn get_commit_messages_from_hash_range(from_hash: &str, to_hash: &str) -> Re
         );
     }
 
-    let messages: Vec<String> = String::from_utf8_lossy(&output.stdout)
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let normalized = normalize_newlines(&raw);
+    let messages: Vec<String> = normalized
         .split('\0')
         .map(|s| s.trim()) // trim removes the trailing newline git adds to %B
         .filter(|s| !s.is_empty())

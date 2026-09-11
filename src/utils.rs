@@ -2,6 +2,14 @@ use crate::constants::IGNORE_COMMIT_PATTERNS;
 use regex::RegexSet;
 use std::sync::LazyLock;
 
+/// Normalize `\r\n` and lone `\r` to `\n`, matching Python's text mode.
+/// Upstream reads git output with `subprocess.check_output(text=True)`
+/// and files with `open()`, both of which perform this normalization.
+/// CLI arguments are NOT normalized (upstream does not do this either).
+pub fn normalize_newlines(s: &str) -> String {
+    s.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 static IGNORE_SET: LazyLock<RegexSet> =
     LazyLock::new(|| RegexSet::new(IGNORE_COMMIT_PATTERNS).unwrap());
 
