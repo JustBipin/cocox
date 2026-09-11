@@ -89,10 +89,9 @@ separate pull requests. This list is what has been measured, not everything that
 
 1. A leading space fails here and passes upstream, because the direct message and
    `--file` contents are never stripped.
-2. A CRLF message file fails here and passes upstream.
-3. `Initial commit\x0cgarbage` is linted here and ignored upstream, per trap 5.
-4. A trailing `\x1c` to `\x1f` survives `trim()` here and is stripped upstream.
-5. A missing `--file` prints a multi-line anyhow chain; upstream prints one line,
+2. `Initial commit\x0cgarbage` is linted here and ignored upstream, per trap 5.
+3. A trailing `\x1c` to `\x1f` survives `trim()` here and is stripped upstream.
+4. A missing `--file` prints a multi-line anyhow chain; upstream prints one line,
    `Error: file '<path>' not found`.
 
 ## Working rules
