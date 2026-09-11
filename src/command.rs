@@ -61,6 +61,7 @@ fn handle_commit_message(message: &str) {
         LintOutcome::Empty => std::process::exit(1),
         LintOutcome::Ignored => {
             console::verbose("commit message ignored, skipping lint", &options.output);
+            console::success(VALIDATION_SUCCESSFUL, &options.output);
         }
         LintOutcome::Valid => {
             console::success(VALIDATION_SUCCESSFUL, &options.output);
@@ -122,15 +123,39 @@ pub fn run(args: Cli) -> Result<()> {
             "removing comments from the commit message",
             &config().output,
         );
-        let message = read_file(file)?;
+        let message = match read_file(file) {
+            Ok(m) => m,
+            Err(e) => {
+                if config().output.quiet {
+                    std::process::exit(1);
+                }
+                return Err(e);
+            }
+        };
         handle_commit_message(&message);
     } else if let Some(hash) = &args.hash {
         console::verbose("commit message source: hash", &config().output);
-        let message = get_commit_message_from_hash(hash)?;
+        let message = match get_commit_message_from_hash(hash) {
+            Ok(m) => m,
+            Err(e) => {
+                if config().output.quiet {
+                    std::process::exit(1);
+                }
+                return Err(e);
+            }
+        };
         handle_commit_message(&message);
     } else if let Some(from_hash) = &args.from_hash {
         console::verbose("commit message source: hash range", &config().output);
-        let messages = get_commit_messages_from_hash_range(from_hash, &args.to_hash)?;
+        let messages = match get_commit_messages_from_hash_range(from_hash, &args.to_hash) {
+            Ok(m) => m,
+            Err(e) => {
+                if config().output.quiet {
+                    std::process::exit(1);
+                }
+                return Err(e);
+            }
+        };
         handle_multiple_commit_messages(&messages);
     } else {
         unreachable!("invalid option is handled by clap");

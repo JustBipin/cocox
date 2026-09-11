@@ -1,8 +1,8 @@
 pub const COMMIT_HEADER_MAX_LENGTH: usize = 72;
 
 pub const COMMIT_TYPES: [&str; 12] = [
-    "build", "bump", "ci", "docs", "feat", "fix", "perf", "refactor", "style", "test", "chore",
-    "revert",
+    "build", "ci", "docs", "feat", "fix", "perf", "refactor", "style", "test", "chore", "revert",
+    "bump",
 ];
 
 pub const IGNORE_COMMIT_PATTERNS: [&str; 9] = [
