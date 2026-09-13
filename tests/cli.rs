@@ -93,12 +93,16 @@ fn whitespace_only_message_aborts() {
 
 // --- ignored messages ------------------------------------------------------
 //
-// These don't match the linter regex but should silently succeed because
+// These don't match the linter regex but should succeed because
 // `command::handle_commit_message` short-circuits via `utils::is_ignored`.
 
 #[test]
 fn merge_commit_is_ignored() {
-    cocox().arg("Merge pull request #123").assert().success();
+    cocox()
+        .arg("Merge pull request #123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
@@ -106,12 +110,17 @@ fn dependabot_bump_is_ignored() {
     cocox()
         .arg("Bump urllib3 from 1.26.5 to 1.26.17")
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 #[test]
 fn initial_commit_is_ignored() {
-    cocox().arg("Initial commit").assert().success();
+    cocox()
+        .arg("Initial commit")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 // --- --file ---------------------------------------------------------------
@@ -240,11 +249,16 @@ fn hash_invalid_commit_message_fails() {
 
 #[test]
 #[serial]
-fn hash_ignored_commit_silently_succeeds() {
+fn hash_ignored_commit_succeeds() {
     let repo = TestRepo::new();
     let hash = repo.commit("Merge pull request #123");
 
-    cocox().arg("--hash").arg(&hash).assert().success();
+    cocox()
+        .arg("--hash")
+        .arg(&hash)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
 }
 
 // ---- hash range ----------------------------------------------------------
@@ -497,7 +511,9 @@ fn message_and_from_hash_together_fail() {
         .assert()
         .failure()
         .code(2)
-        .stderr(predicate::str::contains(""));
+        .stderr(predicate::str::contains(
+            "the argument '[MESSAGE]' cannot be used with '--from-hash <FROM_HASH>'",
+        ));
 }
 
 #[test]
@@ -1173,6 +1189,64 @@ fn error_text_multiple_errors() {
         .stderr(predicate::str::contains(SPACE_AFTER_SCOPE_ERROR));
 }
 
+#[test]
+fn error_messages_match_literal_text() {
+    // Pin the literal text of every error message constant so that changing a
+    // constant value without updating the test fails the suite.
+    let cases: &[(&str, &str)] = &[
+        (
+            "not conventional",
+            "Commit message does not follow the Conventional Commits format.",
+        ),
+        (": add", "Type is missing."),
+        (
+            "invalid: add",
+            "Invalid type 'invalid'. Type must be one of:",
+        ),
+        (
+            "feat (test): add",
+            "There cannot be a space after the type.",
+        ),
+        ("feat(): add", "Scope cannot be empty."),
+        ("feat( ): add", "Scope cannot contain spaces."),
+        (
+            "feat(test) : add",
+            "There cannot be a space after the scope.",
+        ),
+        ("feat:add", "Description must have a leading space."),
+        (
+            "feat:  add",
+            "Description cannot start with multiple spaces.",
+        ),
+        (
+            "feat: abc\nhello",
+            "Description cannot contain line breaks.",
+        ),
+        ("feat(test):", "Description is missing."),
+        ("feat: abc.", "Description cannot end with full stop."),
+    ];
+    for (input, expected_text) in cases {
+        cocox()
+            .arg(*input)
+            .assert()
+            .failure()
+            .code(1)
+            .stderr(predicate::str::contains(*expected_text));
+    }
+    // header_length_error is a function, not a constant, so pin its literal
+    // text separately with the required --max-header-length flag.
+    cocox()
+        .arg("--max-header-length")
+        .arg("10")
+        .arg("feat: abcdefghij")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "Header length cannot exceed 10 characters.",
+        ));
+}
+
 // --- ignored-message success line ------------------------------------------
 
 #[test]
@@ -1304,4 +1378,33 @@ fn max_header_length_string_fails_clap_with_message() {
         .failure()
         .code(2)
         .stderr(predicate::str::contains("is not a valid integer"));
+}
+
+// --- max-header-length whitespace trimming ---------------------------------
+
+#[test]
+fn max_header_length_whitespace_trimmed() {
+    // Python's int() strips surrounding whitespace; our parser should too.
+    cocox()
+        .arg("--max-header-length")
+        .arg(" 5 ")
+        .arg("feat: short")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(header_length_error(5)));
+}
+
+// --- CRLF header-length on direct message ---------------------------------
+
+#[test]
+fn crlf_header_length_direct_message() {
+    // lines() drops trailing \r; split('\n') keeps it.  Upstream uses the
+    // latter, so a direct message with \r\n should count the \r.
+    cocox()
+        .arg("--max-header-length")
+        .arg("10")
+        .arg("feat: abcd\r\nbody")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(header_length_error(10)));
 }

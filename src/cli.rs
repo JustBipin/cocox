@@ -63,7 +63,9 @@ pub struct Cli {
 }
 
 fn positive_usize(value: &str) -> Result<usize, String> {
+    // Python's int() strips surrounding whitespace; we match that behavior.
     let n: i64 = value
+        .trim()
         .parse()
         .map_err(|_| format!("{value} is not a valid integer"))?;
     usize::try_from(n)

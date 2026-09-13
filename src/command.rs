@@ -41,12 +41,11 @@ fn handle_commit_message(message: &str, options: &LintOptions, output: &OutputCo
     console::verbose("linting commit message:", output);
     console::verbose(&format!("----------\n{message}\n----------"), output);
 
-    let result = lint_commit_message_with_errors(message, options);
+    let result = lint_commit_message_with_errors(message, options, output);
 
     match result.outcome {
         LintOutcome::Empty => std::process::exit(1),
         LintOutcome::Ignored => {
-            console::verbose("commit message ignored, skipping lint", output);
             console::success(VALIDATION_SUCCESSFUL, output);
         }
         LintOutcome::Valid => {
@@ -73,13 +72,14 @@ fn handle_multiple_commit_messages(
     let mut has_error = false;
 
     for message in messages {
-        let result = lint_commit_message_with_errors(message, options);
+        console::verbose("linting commit message:", output);
+        console::verbose(&format!("----------\n{message}\n----------"), output);
+
+        let result = lint_commit_message_with_errors(message, options, output);
 
         match result.outcome {
             LintOutcome::Empty => std::process::exit(1),
-            LintOutcome::Ignored | LintOutcome::Valid => {
-                console::verbose("lint success", output);
-            }
+            LintOutcome::Ignored | LintOutcome::Valid => {}
             LintOutcome::Invalid => {
                 has_error = true;
                 show_errors(
@@ -125,7 +125,6 @@ pub fn run(args: Cli) -> Result<()> {
             &format!("reading commit message from file {abs_path}"),
             &output,
         );
-        console::verbose("removing comments from the commit message", &output);
         let message = match read_file(file) {
             Ok(m) => m,
             Err(e) => {
@@ -138,7 +137,7 @@ pub fn run(args: Cli) -> Result<()> {
         handle_commit_message(&message, &lint_options, &output);
     } else if let Some(hash) = &args.hash {
         console::verbose("commit message source: hash", &output);
-        let message = match get_commit_message_from_hash(hash) {
+        let message = match get_commit_message_from_hash(hash, &output) {
             Ok(m) => m,
             Err(e) => {
                 if output.quiet {
@@ -150,7 +149,8 @@ pub fn run(args: Cli) -> Result<()> {
         handle_commit_message(&message, &lint_options, &output);
     } else if let Some(from_hash) = &args.from_hash {
         console::verbose("commit message source: hash range", &output);
-        let messages = match get_commit_messages_from_hash_range(from_hash, &args.to_hash) {
+        let messages = match get_commit_messages_from_hash_range(from_hash, &args.to_hash, &output)
+        {
             Ok(m) => m,
             Err(e) => {
                 if output.quiet {
