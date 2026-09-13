@@ -163,6 +163,7 @@ mod tests {
         assert!(!is_ignored("Merge my feature"));
         assert!(!is_ignored("Add new feature"));
         assert!(!is_ignored("Bump feature1 from feature2"));
+        assert!(!is_ignored("feat: bump x from 1 to 2"));
     }
 
     #[test]

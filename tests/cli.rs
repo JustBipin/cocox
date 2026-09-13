@@ -1035,3 +1035,273 @@ fn cli_rejects_missing_description_empty_after_colon() {
         .code(1)
         .stderr(predicate::str::contains(DESCRIPTION_MISSING_ERROR));
 }
+
+// --- error message text assertions (pins exact product strings) ------------
+
+#[test]
+fn error_text_incorrect_format() {
+    cocox()
+        .arg("feat add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(INCORRECT_FORMAT_ERROR));
+}
+
+#[test]
+fn error_text_commit_type_missing() {
+    cocox()
+        .arg(": add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(COMMIT_TYPE_MISSING_ERROR));
+}
+
+#[test]
+fn error_text_commit_type_invalid() {
+    cocox()
+        .arg("wip: something")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(commit_type_invalid_error("wip")));
+}
+
+#[test]
+fn error_text_space_after_commit_type() {
+    cocox()
+        .arg("feat (test): add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(SPACE_AFTER_COMMIT_TYPE_ERROR));
+}
+
+#[test]
+fn error_text_scope_empty() {
+    cocox()
+        .arg("feat(): add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(SCOPE_EMPTY_ERROR));
+}
+
+#[test]
+fn error_text_scope_whitespace() {
+    cocox()
+        .arg("feat( ): add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(SCOPE_WHITESPACE_ERROR));
+}
+
+#[test]
+fn error_text_space_after_scope() {
+    cocox()
+        .arg("feat(test) : add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(SPACE_AFTER_SCOPE_ERROR));
+}
+
+#[test]
+fn error_text_description_no_leading_space() {
+    cocox()
+        .arg("feat:add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(DESCRIPTION_NO_LEADING_SPACE_ERROR));
+}
+
+#[test]
+fn error_text_description_multiple_spaces() {
+    cocox()
+        .arg("feat:  add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            DESCRIPTION_MULTIPLE_SPACE_START_ERROR,
+        ));
+}
+
+#[test]
+fn error_text_description_line_break() {
+    cocox()
+        .arg("feat: add new feature\nhello baby")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Description cannot contain line breaks.",
+        ));
+}
+
+#[test]
+fn error_text_description_missing() {
+    cocox()
+        .arg("feat(test):")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(DESCRIPTION_MISSING_ERROR));
+}
+
+#[test]
+fn error_text_description_trailing_full_stop() {
+    cocox()
+        .arg("feat: add new feature.")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(DESCRIPTION_FULL_STOP_END_ERROR));
+}
+
+#[test]
+fn error_text_header_length() {
+    let long_header = format!("feat: {}", "a".repeat(100));
+    cocox()
+        .arg("--max-header-length")
+        .arg("72")
+        .arg(&long_header)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(header_length_error(72)));
+}
+
+#[test]
+fn error_text_multiple_errors() {
+    cocox()
+        .arg("feat (test) : add new feature")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Found 2 error(s)."))
+        .stderr(predicate::str::contains(SPACE_AFTER_COMMIT_TYPE_ERROR))
+        .stderr(predicate::str::contains(SPACE_AFTER_SCOPE_ERROR));
+}
+
+// --- ignored-message success line ------------------------------------------
+
+#[test]
+fn ignored_message_prints_success_line() {
+    cocox()
+        .arg("Merge pull request #123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
+}
+
+#[test]
+fn ignored_dependabot_bump_prints_success_line() {
+    cocox()
+        .arg("Bump urllib3 from 1.26.5 to 1.26.17")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
+}
+
+// --- -q guards (silences file/hash errors) ---------------------------------
+
+#[test]
+fn quiet_silences_file_error() {
+    cocox()
+        .arg("-q")
+        .arg("--file")
+        .arg("/nonexistent/path/commit-msg.txt")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn quiet_silences_hash_error() {
+    cocox()
+        .arg("-q")
+        .arg("--hash")
+        .arg("0000000000000000000000000000000000000000")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+#[serial]
+fn quiet_silences_from_hash_error() {
+    let _repo = TestRepo::new();
+    cocox()
+        .arg("-q")
+        .arg("--from-hash")
+        .arg("0000000000000000000000000000000000000000")
+        .arg("--to-hash")
+        .arg("HEAD")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+}
+
+// --- trimming and newline normalization tests ------------------------------
+
+#[test]
+fn leading_space_is_trimmed_and_succeeds() {
+    // Our code trims direct messages, matching upstream behavior.
+    cocox().arg(" feat: add new feature").assert().success();
+}
+
+#[test]
+fn trailing_space_succeeds() {
+    cocox().arg("feat: add new feature  ").assert().success();
+}
+
+#[test]
+fn file_with_crlf_normalized() {
+    // CRLF in file content should be normalized to \n before linting.
+    let file = write_temp("feat: add new feature\r\n\r\nbody line");
+    cocox().arg("--file").arg(file.path()).assert().success();
+}
+
+#[test]
+fn file_with_lone_cr_normalized() {
+    // Lone \r in file content should be normalized to \n before linting.
+    let file = write_temp("feat: add new feature\r\rbody line");
+    cocox().arg("--file").arg(file.path()).assert().success();
+}
+
+// --- CRLF header-length test ----------------------------------------------
+
+#[test]
+fn crlf_header_length_counted_correctly() {
+    // After CRLF normalization, the header is "feat: abcdef" (12 chars).
+    // With max=11, it should fail.
+    let file = write_temp("feat: abcdef\r\n\r\nbody");
+    cocox()
+        .arg("--max-header-length")
+        .arg("11")
+        .arg("--file")
+        .arg(file.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(header_length_error(11)));
+}
+
+// --- ^ anchor regression test ---------------------------------------------
+
+#[test]
+fn bump_lookalike_is_not_ignored() {
+    // With ^ anchor, "feat: bump x from 1 to 2" should NOT be ignored
+    // because "feat:" is the first token, not "Bump".
+    cocox()
+        .arg("feat: bump x from 1 to 2")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(VALIDATION_SUCCESSFUL));
+}
+
+// --- max_header_length_string_fails_clap assertion ------------------------
+
+#[test]
+fn max_header_length_string_fails_clap_with_message() {
+    cocox()
+        .arg("--max-header-length")
+        .arg("abc")
+        .arg("feat: message")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("is not a valid integer"));
+}

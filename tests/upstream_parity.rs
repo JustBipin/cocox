@@ -11,7 +11,7 @@
 //!
 //! Keep this table in step with upstream. If upstream adds a row, add it here.
 
-use cocox::linter::{LintOutcome, lint_commit_message};
+use cocox::linter::{LintOptions, LintOutcome, lint_commit_message};
 
 // Verbatim from upstream `src/commitlint/messages.py`.
 const INCORRECT_FORMAT_ERROR: &str =
@@ -145,10 +145,11 @@ fn fixture_table_has_all_upstream_rows() {
 /// Every row must reach the same pass or fail verdict as upstream.
 #[test]
 fn matches_upstream_linter_fixtures() {
+    let options = LintOptions::default();
     let mut failures = Vec::new();
 
     for (message, expected_success, _) in LINTER_FIXTURE_PARAMS {
-        let outcome = lint_commit_message(message);
+        let outcome = lint_commit_message(message, &options);
         let success = matches!(outcome, LintOutcome::Valid | LintOutcome::Ignored);
         if success != *expected_success {
             failures.push(format!(

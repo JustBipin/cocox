@@ -1,23 +1,11 @@
 use crate::cli::Cli;
-use crate::config::{Config, config, set_config, update_config};
+use crate::config::OutputConfig;
 use crate::console;
 use crate::git_helpers::{get_commit_message_from_hash, get_commit_messages_from_hash_range};
-use crate::linter::{LintOutcome, lint_commit_message_with_errors};
+use crate::linter::{LintOptions, LintOutcome, lint_commit_message_with_errors};
 use crate::messages::{VALIDATION_FAILED, VALIDATION_SUCCESSFUL};
 use crate::utils::{normalize_newlines, remove_diff_from_commit_message};
 use anyhow::{Context, Result};
-
-impl Config {
-    fn from_cli(args: &Cli) -> Self {
-        Self {
-            output: crate::config::OutputConfig::new(args.quiet, args.verbose),
-            skip_detail: args.skip_detail,
-            hide_input: args.hide_input,
-            strip_comments: false,
-            max_header_length: args.max_header_length,
-        }
-    }
-}
 
 fn read_file(file: &str) -> Result<String> {
     let content = std::fs::read_to_string(file)
@@ -25,70 +13,83 @@ fn read_file(file: &str) -> Result<String> {
     Ok(normalize_newlines(&content).trim().to_string())
 }
 
-fn show_errors(message: &str, errors: &[String]) {
-    let options = config();
+fn show_errors(
+    message: &str,
+    errors: &[String],
+    hide_input: bool,
+    skip_detail: bool,
+    output: &OutputConfig,
+) {
     let message = remove_diff_from_commit_message(message);
 
-    if !options.hide_input {
-        console::error(&format!("⧗ Input:\n{message}\n"), &options.output);
+    if !hide_input {
+        console::error(&format!("⧗ Input:\n{message}\n"), output);
     }
 
-    if options.skip_detail {
-        console::error(VALIDATION_FAILED, &options.output);
+    if skip_detail {
+        console::error(VALIDATION_FAILED, output);
         return;
     }
 
-    console::error(
-        &format!("✖ Found {} error(s).", errors.len()),
-        &options.output,
-    );
+    console::error(&format!("✖ Found {} error(s).", errors.len()), output);
     for error in errors {
-        console::error(&format!("- {error}"), &options.output);
+        console::error(&format!("- {error}"), output);
     }
 }
 
-fn handle_commit_message(message: &str) {
-    let options = config();
-    console::verbose("linting commit message:", &options.output);
-    console::verbose(
-        &format!("----------\n{message}\n----------"),
-        &options.output,
-    );
+fn handle_commit_message(message: &str, options: &LintOptions, output: &OutputConfig) {
+    console::verbose("linting commit message:", output);
+    console::verbose(&format!("----------\n{message}\n----------"), output);
 
-    let result = lint_commit_message_with_errors(message);
+    let result = lint_commit_message_with_errors(message, options);
 
     match result.outcome {
         LintOutcome::Empty => std::process::exit(1),
         LintOutcome::Ignored => {
-            console::verbose("commit message ignored, skipping lint", &options.output);
-            console::success(VALIDATION_SUCCESSFUL, &options.output);
+            console::verbose("commit message ignored, skipping lint", output);
+            console::success(VALIDATION_SUCCESSFUL, output);
         }
         LintOutcome::Valid => {
-            console::success(VALIDATION_SUCCESSFUL, &options.output);
+            console::success(VALIDATION_SUCCESSFUL, output);
         }
         LintOutcome::Invalid => {
-            show_errors(message, &result.errors);
+            show_errors(
+                message,
+                &result.errors,
+                options.hide_input,
+                options.skip_detail,
+                output,
+            );
             std::process::exit(1);
         }
     }
 }
 
-fn handle_multiple_commit_messages(messages: &[String]) {
-    let options = config();
+fn handle_multiple_commit_messages(
+    messages: &[String],
+    options: &LintOptions,
+    output: &OutputConfig,
+) {
     let mut has_error = false;
 
     for message in messages {
-        let result = lint_commit_message_with_errors(message);
+        let result = lint_commit_message_with_errors(message, options);
 
         match result.outcome {
             LintOutcome::Empty => std::process::exit(1),
             LintOutcome::Ignored | LintOutcome::Valid => {
-                console::verbose("lint success", &options.output);
+                console::verbose("lint success", output);
             }
             LintOutcome::Invalid => {
                 has_error = true;
-                show_errors(message, &result.errors);
-                console::error("", &options.output);
+                show_errors(
+                    message,
+                    &result.errors,
+                    options.hide_input,
+                    options.skip_detail,
+                    output,
+                );
+                console::error("", output);
             }
         }
     }
@@ -97,66 +98,68 @@ fn handle_multiple_commit_messages(messages: &[String]) {
         std::process::exit(1);
     }
 
-    console::success(VALIDATION_SUCCESSFUL, &options.output);
+    console::success(VALIDATION_SUCCESSFUL, output);
 }
 
 pub fn run(args: Cli) -> Result<()> {
-    set_config(Config::from_cli(&args));
+    let output = OutputConfig::new(args.quiet, args.verbose);
+    let lint_options = LintOptions {
+        skip_detail: args.skip_detail,
+        hide_input: args.hide_input,
+        strip_comments: args.file.is_some(),
+        max_header_length: args.max_header_length,
+    };
 
-    console::verbose("starting cocox", &config().output);
+    console::verbose("starting cocox", &output);
 
     if let Some(message) = &args.message {
-        console::verbose("commit message source: direct message", &config().output);
-        handle_commit_message(message.trim());
+        console::verbose("commit message source: direct message", &output);
+        handle_commit_message(message.trim(), &lint_options, &output);
     } else if let Some(file) = &args.file {
-        console::verbose("commit message source: file", &config().output);
+        console::verbose("commit message source: file", &output);
         let abs_path = std::fs::canonicalize(file)
             .unwrap_or_else(|_| std::path::PathBuf::from(file))
             .display()
             .to_string();
         console::verbose(
             &format!("reading commit message from file {abs_path}"),
-            &config().output,
+            &output,
         );
-        update_config(|config| config.strip_comments = true);
-        console::verbose(
-            "removing comments from the commit message",
-            &config().output,
-        );
+        console::verbose("removing comments from the commit message", &output);
         let message = match read_file(file) {
             Ok(m) => m,
             Err(e) => {
-                if config().output.quiet {
+                if output.quiet {
                     std::process::exit(1);
                 }
                 return Err(e);
             }
         };
-        handle_commit_message(&message);
+        handle_commit_message(&message, &lint_options, &output);
     } else if let Some(hash) = &args.hash {
-        console::verbose("commit message source: hash", &config().output);
+        console::verbose("commit message source: hash", &output);
         let message = match get_commit_message_from_hash(hash) {
             Ok(m) => m,
             Err(e) => {
-                if config().output.quiet {
+                if output.quiet {
                     std::process::exit(1);
                 }
                 return Err(e);
             }
         };
-        handle_commit_message(&message);
+        handle_commit_message(&message, &lint_options, &output);
     } else if let Some(from_hash) = &args.from_hash {
-        console::verbose("commit message source: hash range", &config().output);
+        console::verbose("commit message source: hash range", &output);
         let messages = match get_commit_messages_from_hash_range(from_hash, &args.to_hash) {
             Ok(m) => m,
             Err(e) => {
-                if config().output.quiet {
+                if output.quiet {
                     std::process::exit(1);
                 }
                 return Err(e);
             }
         };
-        handle_multiple_commit_messages(&messages);
+        handle_multiple_commit_messages(&messages, &lint_options, &output);
     } else {
         unreachable!("invalid option is handled by clap");
     }

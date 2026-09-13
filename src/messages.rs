@@ -1,4 +1,4 @@
-use crate::constants::{COMMIT_HEADER_MAX_LENGTH, COMMIT_TYPES};
+use crate::constants::COMMIT_TYPES;
 
 pub const VALIDATION_SUCCESSFUL: &str = "Commit validation: successful!";
 pub const VALIDATION_FAILED: &str = "Commit validation: failed!";
@@ -27,5 +27,3 @@ pub const DESCRIPTION_MULTIPLE_SPACE_START_ERROR: &str =
 pub const DESCRIPTION_LINE_BREAK_ERROR: &str = "Description cannot contain line breaks.";
 pub const DESCRIPTION_MISSING_ERROR: &str = "Description is missing.";
 pub const DESCRIPTION_FULL_STOP_END_ERROR: &str = "Description cannot end with full stop.";
-
-const _: () = assert!(COMMIT_HEADER_MAX_LENGTH == 72);

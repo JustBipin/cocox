@@ -1,4 +1,5 @@
 use crate::constants::COMMIT_TYPES;
+use crate::linter::LintOptions;
 use crate::messages::{
     COMMIT_TYPE_MISSING_ERROR, DESCRIPTION_FULL_STOP_END_ERROR, DESCRIPTION_LINE_BREAK_ERROR,
     DESCRIPTION_MISSING_ERROR, DESCRIPTION_MULTIPLE_SPACE_START_ERROR,
@@ -165,16 +166,12 @@ fn validate_description_no_full_stop_at_end(captures: &regex::Captures<'_>) -> O
         .then_some(DESCRIPTION_FULL_STOP_END_ERROR.to_string())
 }
 
-pub fn run_validators(
-    message: &str,
-    skip_detail: bool,
-    max_header_length: Option<usize>,
-) -> (bool, Vec<String>) {
+pub fn run_validators(message: &str, options: &LintOptions) -> (bool, Vec<String>) {
     // Only run header length check if a custom max was specified.
-    if let Some(max) = max_header_length
+    if let Some(max) = options.max_header_length
         && let Some(error) = validate_header_length(message, max)
     {
-        if skip_detail {
+        if options.skip_detail {
             return (false, vec![error]);
         }
         let mut errors = vec![error];
@@ -182,7 +179,7 @@ pub fn run_validators(
         return (false, errors);
     }
 
-    if skip_detail {
+    if options.skip_detail {
         if let Some(error) = validate_simple_pattern(message) {
             return (false, vec![error]);
         }
@@ -197,6 +194,10 @@ pub fn run_validators(
 mod tests {
     use super::*;
     use crate::constants::COMMIT_HEADER_MAX_LENGTH;
+
+    fn default_options() -> LintOptions {
+        LintOptions::default()
+    }
 
     #[test]
     fn simple_pattern_accepts_valid_commit() {
@@ -241,14 +242,23 @@ mod tests {
     #[test]
     fn skip_detail_returns_only_header_length_error() {
         let message = format!("Test {}", "a".repeat(COMMIT_HEADER_MAX_LENGTH + 1));
-        let (success, errors) = run_validators(&message, true, Some(COMMIT_HEADER_MAX_LENGTH));
+        let options = LintOptions {
+            skip_detail: true,
+            max_header_length: Some(COMMIT_HEADER_MAX_LENGTH),
+            ..default_options()
+        };
+        let (success, errors) = run_validators(&message, &options);
         assert!(!success);
         assert_eq!(errors, vec![header_length_error(COMMIT_HEADER_MAX_LENGTH)]);
     }
 
     #[test]
     fn skip_detail_returns_only_incorrect_format_error() {
-        let (success, errors) = run_validators("Test invalid commit message", true, None);
+        let options = LintOptions {
+            skip_detail: true,
+            ..default_options()
+        };
+        let (success, errors) = run_validators("Test invalid commit message", &options);
         assert!(!success);
         assert_eq!(errors, vec![INCORRECT_FORMAT_ERROR.to_string()]);
     }
@@ -256,7 +266,7 @@ mod tests {
     #[test]
     fn no_header_length_check_when_none() {
         let message = format!("feat: {}", "a".repeat(COMMIT_HEADER_MAX_LENGTH + 100));
-        let (success, errors) = run_validators(&message, false, None);
+        let (success, errors) = run_validators(&message, &default_options());
         assert!(success);
         assert!(errors.is_empty());
     }
@@ -264,7 +274,11 @@ mod tests {
     #[test]
     fn custom_max_header_length_is_respected() {
         let message = "feat: this is exactly 25 characters long";
-        let (success, errors) = run_validators(message, false, Some(10));
+        let options = LintOptions {
+            max_header_length: Some(10),
+            ..default_options()
+        };
+        let (success, errors) = run_validators(message, &options);
         assert!(!success);
         assert!(errors.contains(&header_length_error(10).to_string()));
     }
@@ -273,91 +287,91 @@ mod tests {
 
     #[test]
     fn accepts_valid_commit() {
-        let (ok, errors) = run_validators("feat: add new feature", false, None);
+        let (ok, errors) = run_validators("feat: add new feature", &default_options());
         assert!(ok);
         assert!(errors.is_empty());
     }
 
     #[test]
     fn rejects_missing_type() {
-        let (ok, errors) = run_validators(": add new feature", false, None);
+        let (ok, errors) = run_validators(": add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&COMMIT_TYPE_MISSING_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_invalid_type() {
-        let (ok, errors) = run_validators("invalid: add new feature", false, None);
+        let (ok, errors) = run_validators("invalid: add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&commit_type_invalid_error("invalid")));
     }
 
     #[test]
     fn rejects_space_after_commit_type() {
-        let (ok, errors) = run_validators("feat (test): add new feature", false, None);
+        let (ok, errors) = run_validators("feat (test): add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&SPACE_AFTER_COMMIT_TYPE_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_empty_scope() {
-        let (ok, errors) = run_validators("feat(): add new feature", false, None);
+        let (ok, errors) = run_validators("feat(): add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&SCOPE_EMPTY_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_scope_with_whitespace() {
-        let (ok, errors) = run_validators("feat( ): add new feature", false, None);
+        let (ok, errors) = run_validators("feat( ): add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&SCOPE_WHITESPACE_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_scope_with_space_after() {
-        let (ok, errors) = run_validators("feat(test) : add new feature", false, None);
+        let (ok, errors) = run_validators("feat(test) : add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&SPACE_AFTER_SCOPE_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_description_no_leading_space() {
-        let (ok, errors) = run_validators("feat:add new feature", false, None);
+        let (ok, errors) = run_validators("feat:add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&DESCRIPTION_NO_LEADING_SPACE_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_description_multiple_spaces() {
-        let (ok, errors) = run_validators("feat:  add new feature", false, None);
+        let (ok, errors) = run_validators("feat:  add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&DESCRIPTION_MULTIPLE_SPACE_START_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_description_line_break() {
-        let (ok, errors) = run_validators("feat: add new feature\nhello baby", false, None);
+        let (ok, errors) = run_validators("feat: add new feature\nhello baby", &default_options());
         assert!(!ok);
         assert!(errors.contains(&DESCRIPTION_LINE_BREAK_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_missing_description() {
-        let (ok, errors) = run_validators("feat(test):", false, None);
+        let (ok, errors) = run_validators("feat(test):", &default_options());
         assert!(!ok);
         assert!(errors.contains(&DESCRIPTION_MISSING_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_description_trailing_full_stop() {
-        let (ok, errors) = run_validators("feat: add new feature.", false, None);
+        let (ok, errors) = run_validators("feat: add new feature.", &default_options());
         assert!(!ok);
         assert!(errors.contains(&DESCRIPTION_FULL_STOP_END_ERROR.to_string()));
     }
 
     #[test]
     fn rejects_incorrect_format() {
-        let (ok, errors) = run_validators("feat add new feature", false, None);
+        let (ok, errors) = run_validators("feat add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&INCORRECT_FORMAT_ERROR.to_string()));
     }
@@ -365,7 +379,7 @@ mod tests {
     #[test]
     fn rejects_multiple_errors() {
         // space after type + space after scope
-        let (ok, errors) = run_validators("feat (test) : add new feature", false, None);
+        let (ok, errors) = run_validators("feat (test) : add new feature", &default_options());
         assert!(!ok);
         assert!(errors.contains(&SPACE_AFTER_COMMIT_TYPE_ERROR.to_string()));
         assert!(errors.contains(&SPACE_AFTER_SCOPE_ERROR.to_string()));
@@ -374,7 +388,8 @@ mod tests {
     #[test]
     fn accepts_every_known_commit_type() {
         for kind in COMMIT_TYPES {
-            let (ok, errors) = run_validators(&format!("{}: do the thing", kind), false, None);
+            let (ok, errors) =
+                run_validators(&format!("{}: do the thing", kind), &default_options());
             assert!(
                 ok,
                 "type {kind:?} should be accepted, got errors: {errors:?}"
