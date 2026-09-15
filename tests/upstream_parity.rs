@@ -4,8 +4,7 @@
 //! One row per upstream row, in the same order, with the same three columns:
 //! (commit message, expected success, expected errors).
 //!
-//! Only the success column is asserted here. The error strings are listed
-//! verbatim for reference but not yet asserted against the third column.
+//! The success column and error strings are both asserted against upstream.
 //!
 //! Keep this table in step with upstream. If upstream adds a row, add it here.
 

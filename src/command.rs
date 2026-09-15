@@ -44,7 +44,10 @@ fn handle_commit_message(message: &str, options: &LintOptions, output: &OutputCo
     let result = lint_commit_message_with_errors(message, options, output);
 
     match result.outcome {
-        LintOutcome::Empty => std::process::exit(1),
+        LintOutcome::Empty => {
+            console::error(VALIDATION_FAILED, output);
+            std::process::exit(1);
+        }
         LintOutcome::Ignored => {
             console::success(VALIDATION_SUCCESSFUL, output);
         }
@@ -78,7 +81,10 @@ fn handle_multiple_commit_messages(
         let result = lint_commit_message_with_errors(message, options, output);
 
         match result.outcome {
-            LintOutcome::Empty => std::process::exit(1),
+            LintOutcome::Empty => {
+                console::error(VALIDATION_FAILED, output);
+                std::process::exit(1);
+            }
             LintOutcome::Ignored | LintOutcome::Valid => {}
             LintOutcome::Invalid => {
                 has_error = true;

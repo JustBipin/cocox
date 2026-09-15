@@ -17,7 +17,7 @@ with the Rust toolchain in place of the Python one.
 
 Before contributing, ensure that you have the following:
 
-- **Rust 1.88 or newer**. The project uses edition 2024 and let chains, which older toolchains
+- **Rust 1.85 or newer**. The project uses edition 2024, which older toolchains
   cannot build. Install it with [rustup](https://rustup.rs/), then run `rustup update stable`.
 - **Git**, because several tests create real repositories and shell out to `git`.
 - Optionally, **Python 3.10 or newer** and `pip`, if you want to compare against the

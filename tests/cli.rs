@@ -179,6 +179,18 @@ fn file_with_whitespace_only_content_aborts() {
 }
 
 #[test]
+fn file_with_comment_only_content_fails() {
+    let file = write_temp("# this is a comment");
+    cocox()
+        .arg("--file")
+        .arg(file.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(VALIDATION_FAILED));
+}
+
+#[test]
 fn missing_file_fails() {
     cocox()
         .arg("--file")
